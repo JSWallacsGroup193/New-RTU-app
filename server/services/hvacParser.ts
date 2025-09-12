@@ -70,12 +70,12 @@ const BTU_MAPPINGS: Record<string, Record<string, number>> = {
     "012": 12000, "018": 18000, "024": 24000, "030": 30000, "036": 36000, "042": 42000,
     "048": 48000, "060": 60000, "072": 72000, "090": 90000
   },
-  // Asian manufacturers (LG, Samsung, Mitsubishi, Fujitsu, Daikin)
+  // Asian manufacturers (LG, Samsung, Mitsubishi, Fujitsu, Daikin) - minisplit semantics
   asian: {
     "09": 9000, "009": 9000, "12": 12000, "012": 12000, "18": 18000, "018": 18000, 
     "24": 24000, "024": 24000, "30": 30000, "030": 30000, "36": 36000, "036": 36000,
     "42": 42000, "042": 42000, "48": 48000, "048": 48000, "60": 60000, "060": 60000, 
-    "72": 72000, "072": 72000, "90": 90000, "090": 90000, "120": 120000
+    "72": 72000, "072": 72000, "90": 9000, "090": 9000, "120": 12000, "180": 18000, "240": 24000
   }
 };
 
@@ -90,14 +90,109 @@ const PHASE_MAPPINGS: Record<string, string> = {
 
 // UNIVERSAL MANUFACTURER PATTERNS - Supporting ALL major HVAC brands
 const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
+  // ASIAN MANUFACTURERS - MOVED TO TOP TO AVOID GENERIC PATTERN CONFLICTS
+  // LG (Asian manufacturer)
+  {
+    name: "LG",
+    patterns: [
+      /^(LSN|LSU|LSA|LFU)([0-9]{2,3})[A-Z0-9]*$/i, // LSN120HV4, LSU120HSV4 - LG specific prefixes
+      /^([0-9]{2,3})(LSN|LSU|LSA|LFU)([0-9]{2,3})[A-Z0-9]*$/i
+    ],
+    parser: (modelNumber, match) => {
+      const sizeCode = match[2] || match[3];
+      // Normalize 3-digit Asian codes to 2-digit for proper BTU mapping
+      const normalizedSize = sizeCode.length === 3 && parseInt(sizeCode) <= 240 ? 
+                            String(parseInt(sizeCode) / 10).padStart(2, '0') : sizeCode;
+      const btuCapacity = BTU_MAPPINGS.asian[normalizedSize] || BTU_MAPPINGS.asian[sizeCode];
+      if (!btuCapacity) return null;
+      
+      const systemType = modelNumber.includes("LSU") || modelNumber.includes("LSN") ? "Heat Pump" : "Straight A/C";
+      
+      return {
+        manufacturer: "LG",
+        confidence: 88,
+        systemType: systemType as any,
+        btuCapacity,
+        voltage: "208-230",
+        phases: "1",
+        specifications: [
+          { label: "SEER Rating", value: "19" },
+          { label: "Refrigerant", value: "R-410A" },
+          { label: "Sound Level", value: "65", unit: "dB" }
+        ]
+      };
+    }
+  },
+  // MITSUBISHI
+  {
+    name: "Mitsubishi",
+    patterns: [
+      /^(MSZ|PLA|MUZ|MLZ)[\-A-Z]*([0-9]{2,3})[A-Z0-9]*$/i, // MSZ-FE12NA, PLA-A12AA4 - Mitsubishi with flexible middle section
+      /^([0-9]{2,3})(MSZ|PLA|MUZ|MLZ)([0-9]{2,3})[A-Z0-9]*$/i
+    ],
+    parser: (modelNumber, match) => {
+      const sizeCode = match[2] || match[3];
+      // Normalize 3-digit Asian codes to 2-digit for proper BTU mapping
+      const normalizedSize = sizeCode.length === 3 && parseInt(sizeCode) <= 240 ? 
+                            String(parseInt(sizeCode) / 10).padStart(2, '0') : sizeCode;
+      const btuCapacity = BTU_MAPPINGS.asian[normalizedSize] || BTU_MAPPINGS.asian[sizeCode];
+      if (!btuCapacity) return null;
+      
+      const systemType = modelNumber.includes("MSZ") || modelNumber.includes("PLA") ? "Heat Pump" : "Straight A/C";
+      
+      return {
+        manufacturer: "Mitsubishi",
+        confidence: 92,
+        systemType: systemType as any,
+        btuCapacity,
+        voltage: "208-230",
+        phases: "1",
+        specifications: [
+          { label: "SEER Rating", value: "22" },
+          { label: "Refrigerant", value: "R-410A" },
+          { label: "Sound Level", value: "58", unit: "dB" }
+        ]
+      };
+    }
+  },
+  // BRYANT (Carrier subsidiary) - MUST COME BEFORE CARRIER TO AVOID CONFLICTS  
+  {
+    name: "Bryant",
+    patterns: [
+      /^([0-9]{2})(CKC|FB|STA|GAS)([0-9]{2,3})[A-Z0-9]*$/i, // 38CKC036, 58STA042 - Bryant specific prefixes
+      /^(CKC|FB|STA|GAS)([0-9]{2,3})[A-Z0-9]*$/i // Bryant specific prefixes only, excluding American Standard/Trane prefixes
+    ],
+    parser: (modelNumber, match) => {
+      const sizeCode = match[3] || match[2];
+      const btuCapacity = BTU_MAPPINGS.carrier[sizeCode];
+      if (!btuCapacity) return null;
+      
+      const systemType = modelNumber.includes("CKC") || modelNumber.includes("FB") ? "Heat Pump" :
+                        modelNumber.includes("STA") || modelNumber.includes("GAS") ? "Gas/Electric" : "Straight A/C";
+      
+      return {
+        manufacturer: "Bryant",
+        confidence: 89,
+        systemType: systemType as any,
+        btuCapacity,
+        voltage: "208-230",
+        phases: "1",
+        specifications: [
+          { label: "SEER Rating", value: "16" },
+          { label: "Refrigerant", value: "R-410A" },
+          { label: "Sound Level", value: "72", unit: "dB" }
+        ]
+      };
+    }
+  },
   {
     name: "Carrier",
     patterns: [
-      /^(50|38)[A-Z]{2,3}([0-9]{3,4})[A-Z0-9]*$/i, // 50TCQA04, 38HDR048
-      /^([0-9]{2})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i // Generic Carrier pattern
+      /^(50|38)(TC|HD|HV|TQ)([0-9]{2,4})[A-Z0-9]*$/i, // 50TCQA04, 38HDR048 - Carrier specific prefixes
+      /^([0-9]{2})(TC|HD|HV|TQ)([0-9]{2,3})[A-Z0-9]*$/i // Carrier patterns excluding Bryant prefixes
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[2];
+      const sizeCode = match[3] || match[2];
       const btuCapacity = BTU_MAPPINGS.carrier[sizeCode];
       if (!btuCapacity) return null;
 
@@ -119,11 +214,41 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       };
     }
   },
+  // AMERICAN STANDARD (Trane subsidiary) - MUST COME BEFORE TRANE TO AVOID CONFLICTS
+  {
+    name: "American Standard",
+    patterns: [
+      /^(TUR|TTD|TUH|TTA)([0-9]{2,3})[A-Z0-9]*$/i, // TUR042C300AA, TTD042C300BA - American Standard specific prefixes
+      /^([0-9]{2})(TUR|TTD|TUH|TTA)([0-9]{2,3})[A-Z0-9]*$/i
+    ],
+    parser: (modelNumber, match) => {
+      const sizeCode = match[2] || match[3];
+      const btuCapacity = BTU_MAPPINGS.trane[sizeCode];
+      if (!btuCapacity) return null;
+      
+      const systemType = modelNumber.includes("TTR") || modelNumber.includes("TUR") ? "Heat Pump" :
+                        modelNumber.includes("TUD") || modelNumber.includes("TTD") ? "Gas/Electric" : "Straight A/C";
+      
+      return {
+        manufacturer: "American Standard",
+        confidence: 87,
+        systemType: systemType as any,
+        btuCapacity,
+        voltage: "208-230",
+        phases: "1",
+        specifications: [
+          { label: "SEER Rating", value: "16" },
+          { label: "Refrigerant", value: "R-410A" },
+          { label: "Sound Level", value: "71", unit: "dB" }
+        ]
+      };
+    }
+  },
   {
     name: "Trane",
     patterns: [
       /^([0-9]{3})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i, // 4TTR6036, 2TWR2036
-      /^([A-Z]{3})([0-9]{2,3})[A-Z0-9]*$/i // TWR036A1000AA
+      /^(TWR|TTR|TSC|TTA|TEM)([0-9]{2,3})[A-Z0-9]*$/i // TWR036A1000AA - Trane specific prefixes, not TUR/TTD
     ],
     parser: (modelNumber, match) => {
       const sizeCode = match[2] || match[1];
@@ -151,8 +276,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "York",
     patterns: [
-      /^([A-Z]{2,4})([0-9]{3})[A-Z0-9]*$/i, // YCJF36S41S2, YHJF48S41S3
-      /^([0-9]{2})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i
+      /^(YCJ|YHJ|YMG|YCJF|YHJF)([0-9]{2,3})[A-Z0-9]*$/i, // YCJF36S41S2, YHJF48S41S3 - York specific prefixes only
+      /^([0-9]{2})(YCJ|YHJ|YMG)([0-9]{2,3})[A-Z0-9]*$/i // York specific prefixes only
     ],
     parser: (modelNumber, match) => {
       const sizeCode = match[2] || match[1];
@@ -180,8 +305,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "Lennox",
     patterns: [
-      /^([A-Z]{2,4})([0-9]{2,3})[A-Z0-9]*$/i, // XP16-036-230, HP21-048-230
-      /^([0-9]{2})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i
+      /^(XP|EL|SL|ML|HS|CH|CBX|ELX|HP)([0-9]{2,3})[A-Z0-9\-]*$/i, // XP16-036-230, HP21-048-230 - Lennox specific prefixes
+      /^([0-9]{2})(XP|EL|SL|ML|HS|CH|CBX|ELX|HP)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
       const sizeCode = match[2] || match[1];
@@ -260,66 +385,6 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
           { label: "SEER Rating", value: "16" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "73", unit: "dB" }
-        ]
-      };
-    }
-  },
-  // AMERICAN STANDARD (Trane subsidiary)
-  {
-    name: "American Standard",
-    patterns: [
-      /^([A-Z]{3,4})([0-9]{2,3})[A-Z0-9]*$/i, // TUR042C300AA, TTD042C300BA
-      /^([0-9]{2})[A-Z]{3,4}([0-9]{2,3})[A-Z0-9]*$/i
-    ],
-    parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.trane[sizeCode];
-      if (!btuCapacity) return null;
-      
-      const systemType = modelNumber.includes("TTR") || modelNumber.includes("TUR") ? "Heat Pump" :
-                        modelNumber.includes("TUD") || modelNumber.includes("TTD") ? "Gas/Electric" : "Straight A/C";
-      
-      return {
-        manufacturer: "American Standard",
-        confidence: 87,
-        systemType: systemType as any,
-        btuCapacity,
-        voltage: "208-230",
-        phases: "1",
-        specifications: [
-          { label: "SEER Rating", value: "16" },
-          { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "71", unit: "dB" }
-        ]
-      };
-    }
-  },
-  // BRYANT (Carrier subsidiary)
-  {
-    name: "Bryant",
-    patterns: [
-      /^([0-9]{2})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i, // 38CKC036, 58STA042
-      /^([A-Z]{2,4})([0-9]{2,3})[A-Z0-9]*$/i
-    ],
-    parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.carrier[sizeCode];
-      if (!btuCapacity) return null;
-      
-      const systemType = modelNumber.includes("CKC") || modelNumber.includes("FB") ? "Heat Pump" :
-                        modelNumber.includes("STA") || modelNumber.includes("GAS") ? "Gas/Electric" : "Straight A/C";
-      
-      return {
-        manufacturer: "Bryant",
-        confidence: 89,
-        systemType: systemType as any,
-        btuCapacity,
-        voltage: "208-230",
-        phases: "1",
-        specifications: [
-          { label: "SEER Rating", value: "16" },
-          { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "72", unit: "dB" }
         ]
       };
     }
