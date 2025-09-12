@@ -71,3 +71,23 @@ export const decodeResponseSchema = z.object({
 });
 
 export type DecodeResponse = z.infer<typeof decodeResponseSchema>;
+
+// Spec search response schema
+export const specSearchResponseSchema = z.object({
+  results: z.array(z.object({
+    id: z.string(),
+    modelNumber: z.string(),
+    systemType: z.enum(["Heat Pump", "Gas/Electric", "Straight A/C"]),
+    btuCapacity: z.number(),
+    voltage: z.string(),
+    phases: z.string(),
+    specifications: z.array(z.object({
+      label: z.string(),
+      value: z.string(),
+      unit: z.string().optional()
+    }))
+  })),
+  count: z.number()
+});
+
+export type SpecSearchResponse = z.infer<typeof specSearchResponseSchema>;

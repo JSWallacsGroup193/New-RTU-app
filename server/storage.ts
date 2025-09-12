@@ -1,37 +1,41 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type ParsedModel, type Replacement } from "@shared/schema";
 
 // modify the interface with any CRUD methods
 // you might need
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Cache parsed models for faster lookups
+  cacheParsedModel(modelNumber: string, parsed: ParsedModel): Promise<void>;
+  getCachedModel(modelNumber: string): Promise<ParsedModel | undefined>;
+  
+  // Cache replacement results
+  cacheReplacements(originalModel: string, replacements: Replacement[]): Promise<void>;
+  getCachedReplacements(originalModel: string): Promise<Replacement[] | undefined>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private parsedModelsCache: Map<string, ParsedModel>;
+  private replacementsCache: Map<string, Replacement[]>;
 
   constructor() {
-    this.users = new Map();
+    this.parsedModelsCache = new Map();
+    this.replacementsCache = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async cacheParsedModel(modelNumber: string, parsed: ParsedModel): Promise<void> {
+    this.parsedModelsCache.set(modelNumber.toUpperCase(), parsed);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getCachedModel(modelNumber: string): Promise<ParsedModel | undefined> {
+    return this.parsedModelsCache.get(modelNumber.toUpperCase());
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async cacheReplacements(originalModel: string, replacements: Replacement[]): Promise<void> {
+    this.replacementsCache.set(originalModel.toUpperCase(), replacements);
+  }
+
+  async getCachedReplacements(originalModel: string): Promise<Replacement[] | undefined> {
+    return this.replacementsCache.get(originalModel.toUpperCase());
   }
 }
 
