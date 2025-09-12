@@ -45,7 +45,7 @@ export default function ErrorDisplay({ message, onRetry, onNewSearch }: ErrorDis
           
           <div className="text-sm text-muted-foreground">
             <p><strong>Tip:</strong> Make sure your model number is correct and supported.</p>
-            <p>Supported manufacturers: Carrier, Trane, York, Lennox, Goodman, Rheem</p>
+            <p>Universal support for <strong>ALL major HVAC manufacturers</strong> (26+ brands including Carrier, Trane, American Standard, York, Lennox, Goodman, Rheem, Bryant, Payne, Ruud, Amana, ICP brands, and more)</p>
           </div>
         </CardContent>
       </Card>

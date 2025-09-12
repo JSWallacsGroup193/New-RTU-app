@@ -137,23 +137,61 @@ export default function HVACDecoder() {
               </Card>
             </div>
 
-            {/* Supported Manufacturers */}
+            {/* Universal Manufacturer Support */}
             <div className="text-center space-y-4">
-              <h3 className="text-lg font-semibold text-muted-foreground">Supported Manufacturers</h3>
-              <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
-                <span>Carrier</span>
-                <span>•</span>
-                <span>Trane</span>
-                <span>•</span>
-                <span>York</span>
-                <span>•</span>
-                <span>Lennox</span>
-                <span>•</span>
-                <span>Goodman</span>
-                <span>•</span>
-                <span>Rheem</span>
-                <span>•</span>
-                <span>And More</span>
+              <h3 className="text-lg font-semibold text-muted-foreground">Universal HVAC Decoder</h3>
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-foreground">
+                  🎯 Supports <span className="text-primary font-bold">ALL Major HVAC Manufacturers</span> (26+ Brands)
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+                  <span>Carrier</span>
+                  <span>•</span>
+                  <span>Trane</span>
+                  <span>•</span>
+                  <span>American Standard</span>
+                  <span>•</span>
+                  <span>York</span>
+                  <span>•</span>
+                  <span>Lennox</span>
+                  <span>•</span>
+                  <span>Goodman</span>
+                  <span>•</span>
+                  <span>Rheem</span>
+                  <span>•</span>
+                  <span>Bryant</span>
+                  <span>•</span>
+                  <span>Payne</span>
+                  <span>•</span>
+                  <span>Ruud</span>
+                  <span>•</span>
+                  <span>Amana</span>
+                  <span>•</span>
+                  <span>Tempstar</span>
+                  <span>•</span>
+                  <span>Heil</span>
+                  <span>•</span>
+                  <span>Comfortmaker</span>
+                  <span>•</span>
+                  <span>ICP Brands</span>
+                  <span>•</span>
+                  <span>Nordyne</span>
+                  <span>•</span>
+                  <span>Frigidaire</span>
+                  <span>•</span>
+                  <span>LG</span>
+                  <span>•</span>
+                  <span>Mitsubishi</span>
+                  <span>•</span>
+                  <span>Daikin</span>
+                  <span>•</span>
+                  <span>Coleman</span>
+                  <span>•</span>
+                  <span>And More</span>
+                </div>
+                <p className="text-xs text-muted-foreground italic">
+                  Decodes any manufacturer model number • Provides Daikin replacements only
+                </p>
               </div>
             </div>
           </div>
