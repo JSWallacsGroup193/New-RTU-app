@@ -3,17 +3,21 @@ import { useMutation } from "@tanstack/react-query";
 import ModelInputForm from "./ModelInputForm";
 import SearchResults from "./SearchResults";
 import ErrorDisplay from "./ErrorDisplay";
+import SpecificationSearchForm from "./SpecificationSearchForm";
+import SpecificationSearchResults from "./SpecificationSearchResults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Database, Search, Zap } from "lucide-react";
-import { decodeModelNumber } from "@/lib/api";
-import { DecodeResponse } from "@shared/schema";
+import { decodeModelNumber, searchBySpecs } from "@/lib/api";
+import { DecodeResponse, SpecSearchResponse } from "@shared/schema";
 
-type AppState = "search" | "results" | "error";
+type AppState = "search" | "results" | "error" | "spec-search" | "spec-results";
 
 export default function HVACDecoder() {
   const [appState, setAppState] = useState<AppState>("search");
   const [searchResults, setSearchResults] = useState<DecodeResponse | null>(null);
+  const [specSearchResults, setSpecSearchResults] = useState<SpecSearchResponse | null>(null);
+  const [specSearchParams, setSpecSearchParams] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const decodeMutation = useMutation({
@@ -30,6 +34,20 @@ export default function HVACDecoder() {
     },
   });
 
+  const specSearchMutation = useMutation({
+    mutationFn: searchBySpecs,
+    onSuccess: (data) => {
+      setSpecSearchResults(data);
+      setAppState("spec-results");
+      setErrorMessage("");
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message);
+      setAppState("error");
+      setSpecSearchResults(null);
+    },
+  });
+
   const handleSearch = async (modelNumber: string) => {
     console.log("Searching for model:", modelNumber);
     decodeMutation.mutate(modelNumber);
@@ -38,12 +56,26 @@ export default function HVACDecoder() {
   const handleNewSearch = () => {
     setAppState("search");
     setSearchResults(null);
+    setSpecSearchResults(null);
+    setSpecSearchParams(null);
     setErrorMessage("");
     decodeMutation.reset();
+    specSearchMutation.reset();
   };
 
   const handleSpecSearch = () => {
-    console.log("Opening specification search - TODO: implement");
+    setAppState("spec-search");
+  };
+
+  const handleSpecSearchSubmit = (params: any) => {
+    setSpecSearchParams(params);
+    specSearchMutation.mutate(params);
+  };
+
+  const handleBackToSpecForm = () => {
+    setAppState("spec-search");
+    setErrorMessage("");
+    specSearchMutation.reset();
   };
 
   const handleRetry = () => {
@@ -126,6 +158,14 @@ export default function HVACDecoder() {
             </div>
           </div>
         </div>
+      ) : appState === "spec-search" ? (
+        <div className="container mx-auto px-4 py-8">
+          <SpecificationSearchForm
+            onSearch={handleSpecSearchSubmit}
+            onBack={handleNewSearch}
+            isLoading={specSearchMutation.isPending}
+          />
+        </div>
       ) : appState === "results" && searchResults ? (
         <div className="container mx-auto px-4 py-8">
           <SearchResults
@@ -134,6 +174,13 @@ export default function HVACDecoder() {
             onNewSearch={handleNewSearch}
           />
         </div>
+      ) : appState === "spec-results" && specSearchResults && specSearchParams ? (
+        <SpecificationSearchResults
+          searchResults={specSearchResults}
+          searchParams={specSearchParams}
+          onNewSearch={handleNewSearch}
+          onBackToSpecForm={handleBackToSpecForm}
+        />
       ) : appState === "error" ? (
         <div className="container mx-auto px-4 py-8">
           <ErrorDisplay
