@@ -134,9 +134,7 @@ export default function HVACDecoder() {
           <div className="max-w-4xl mx-auto space-y-8">
             {/* Hero Section */}
             <div className="text-center space-y-4">
-              <h1 className="text-4xl font-bold text-primary">
-                Universal HVAC Decoder
-              </h1>
+              <h1 className="text-4xl font-bold text-primary">Package Unit System Selector</h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 Decode any manufacturer's HVAC model number and find equivalent Daikin replacements. 
                 Supporting all major brands with precision matching.
