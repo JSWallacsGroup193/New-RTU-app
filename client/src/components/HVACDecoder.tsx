@@ -1,130 +1,55 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import ModelInputForm from "./ModelInputForm";
 import SearchResults from "./SearchResults";
+import ErrorDisplay from "./ErrorDisplay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Database, Search, Zap } from "lucide-react";
+import { decodeModelNumber } from "@/lib/api";
+import { DecodeResponse } from "@shared/schema";
 
-// Mock data for demonstration - TODO: remove mock functionality
-const mockOriginalUnit = {
-  modelNumber: "50TCQA04",
-  manufacturer: "Carrier",
-  confidence: 95,
-  systemType: "Heat Pump" as const,
-  btuCapacity: 48000,
-  voltage: "460",
-  phases: "3",
-  specifications: [
-    { label: "SEER Rating", value: "16" },
-    { label: "Refrigerant", value: "R-410A" },
-    { label: "Sound Level", value: "72", unit: "dB" },
-    { label: "Dimensions", value: "48 x 48 x 36", unit: "in" },
-    { label: "Weight", value: "485", unit: "lbs" },
-    { label: "Warranty", value: "10", unit: "years" }
-  ]
-};
-
-const mockReplacements = [
-  {
-    id: "1",
-    modelNumber: "DZ14SA0361A",
-    systemType: "Heat Pump" as const,
-    btuCapacity: 36000,
-    voltage: "460",
-    phases: "3",
-    specifications: [
-      { label: "SEER Rating", value: "16" },
-      { label: "Sound Level", value: "70", unit: "dB" },
-      { label: "Refrigerant", value: "R-410A" },
-      { label: "Weight", value: "425", unit: "lbs" }
-    ],
-    sizeMatch: "smaller" as const
-  },
-  {
-    id: "2",
-    modelNumber: "DZ14SA0481A",
-    systemType: "Heat Pump" as const,
-    btuCapacity: 48000,
-    voltage: "460",
-    phases: "3",
-    specifications: [
-      { label: "SEER Rating", value: "16" },
-      { label: "Sound Level", value: "72", unit: "dB" },
-      { label: "Refrigerant", value: "R-410A" },
-      { label: "Weight", value: "485", unit: "lbs" }
-    ],
-    sizeMatch: "direct" as const
-  },
-  {
-    id: "3",
-    modelNumber: "DZ14SA0601A",
-    systemType: "Heat Pump" as const,
-    btuCapacity: 60000,
-    voltage: "460",
-    phases: "3",
-    specifications: [
-      { label: "SEER Rating", value: "16" },
-      { label: "Sound Level", value: "74", unit: "dB" },
-      { label: "Refrigerant", value: "R-410A" },
-      { label: "Weight", value: "545", unit: "lbs" }
-    ],
-    sizeMatch: "larger" as const
-  },
-  {
-    id: "4",
-    modelNumber: "DZ14GS0481A", 
-    systemType: "Gas/Electric" as const,
-    btuCapacity: 48000,
-    voltage: "460",
-    phases: "3",
-    specifications: [
-      { label: "AFUE Rating", value: "80%" },
-      { label: "Sound Level", value: "70", unit: "dB" },
-      { label: "Refrigerant", value: "R-410A" },
-      { label: "Weight", value: "520", unit: "lbs" }
-    ],
-    sizeMatch: "direct" as const
-  },
-  {
-    id: "5",
-    modelNumber: "DZ14AC0481A",
-    systemType: "Straight A/C" as const,  
-    btuCapacity: 48000,
-    voltage: "460",
-    phases: "3",
-    specifications: [
-      { label: "SEER Rating", value: "16" },
-      { label: "Sound Level", value: "71", unit: "dB" },
-      { label: "Refrigerant", value: "R-410A" },
-      { label: "Weight", value: "455", unit: "lbs" }
-    ],
-    sizeMatch: "direct" as const
-  }
-];
-
-type AppState = "search" | "results";
+type AppState = "search" | "results" | "error";
 
 export default function HVACDecoder() {
   const [appState, setAppState] = useState<AppState>("search");
-  const [isLoading, setIsLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<DecodeResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  const decodeMutation = useMutation({
+    mutationFn: decodeModelNumber,
+    onSuccess: (data) => {
+      setSearchResults(data);
+      setAppState("results");
+      setErrorMessage("");
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message);
+      setAppState("error");
+      setSearchResults(null);
+    },
+  });
 
   const handleSearch = async (modelNumber: string) => {
     console.log("Searching for model:", modelNumber);
-    setIsLoading(true);
-    
-    // Simulate API call - TODO: remove mock functionality
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsLoading(false);
-    setAppState("results");
+    decodeMutation.mutate(modelNumber);
   };
 
   const handleNewSearch = () => {
     setAppState("search");
+    setSearchResults(null);
+    setErrorMessage("");
+    decodeMutation.reset();
   };
 
   const handleSpecSearch = () => {
     console.log("Opening specification search - TODO: implement");
+  };
+
+  const handleRetry = () => {
+    setAppState("search");
+    setErrorMessage("");
+    decodeMutation.reset();
   };
 
   return (
@@ -143,7 +68,7 @@ export default function HVACDecoder() {
 
             {/* Main Search Form */}
             <div className="flex justify-center">
-              <ModelInputForm onSearch={handleSearch} isLoading={isLoading} />
+              <ModelInputForm onSearch={handleSearch} isLoading={decodeMutation.isPending} />
             </div>
 
             {/* Alternative Options */}
@@ -201,15 +126,23 @@ export default function HVACDecoder() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : appState === "results" && searchResults ? (
         <div className="container mx-auto px-4 py-8">
           <SearchResults
-            originalUnit={mockOriginalUnit}
-            replacements={mockReplacements}
+            originalUnit={searchResults.originalUnit}
+            replacements={searchResults.replacements}
             onNewSearch={handleNewSearch}
           />
         </div>
-      )}
+      ) : appState === "error" ? (
+        <div className="container mx-auto px-4 py-8">
+          <ErrorDisplay
+            message={errorMessage}
+            onRetry={handleRetry}
+            onNewSearch={handleNewSearch}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
