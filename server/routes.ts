@@ -35,7 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!parsedModel) {
         // Parse the model number
-        parsedModel = parser.parseModelNumber(modelNumber);
+        parsedModel = parser.parseModelNumber(modelNumber) || undefined;
         
         if (!parsedModel) {
           return res.status(400).json({
