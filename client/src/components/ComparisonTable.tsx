@@ -253,11 +253,11 @@ export default function ComparisonTable({
     },
     {
       category: 'Efficiency',
-      label: 'SEER Rating',
-      originalValue: getSpecValue(originalUnit.specifications, 'SEER') || getSpecValue(originalUnit.specifications, 'SEER Rating') || 'N/A',
+      label: 'SEER2 Rating',
+      originalValue: getSpecValue(originalUnit.specifications, 'SEER2 Rating') || getSpecValue(originalUnit.specifications, 'SEER') || 'N/A',
       replacementValue: replacementUnit.seerRating || getSpecValue(replacementUnit.specifications, 'SEER') || 'N/A',
       improvement: calculateEfficiencyImprovement(
-        getNumericSpecValue(originalUnit.specifications, 'SEER') || getNumericSpecValue(originalUnit.specifications, 'SEER Rating'),
+        getNumericSpecValue(originalUnit.specifications, 'SEER2 Rating') || getNumericSpecValue(originalUnit.specifications, 'SEER'),
         replacementUnit.seerRating || getNumericSpecValue(replacementUnit.specifications, 'SEER')
       ),
       description: 'Seasonal Energy Efficiency Ratio - higher is better'
@@ -297,7 +297,7 @@ export default function ComparisonTable({
       replacementValue: replacementUnit.eerRating || 'N/A',
       improvement: calculateEfficiencyImprovement(
         getNumericSpecValue(originalUnit.specifications, 'EER'),
-        replacementUnit.eerRating
+        replacementUnit.eerRating ?? null
       ),
       description: 'Energy Efficiency Ratio at peak conditions'
     });
@@ -311,7 +311,7 @@ export default function ComparisonTable({
       replacementValue: replacementUnit.hspfRating || 'N/A',
       improvement: calculateEfficiencyImprovement(
         getNumericSpecValue(originalUnit.specifications, 'HSPF'),
-        replacementUnit.hspfRating
+        replacementUnit.hspfRating ?? null
       ),
       description: 'Heating Seasonal Performance Factor for heat pumps'
     });

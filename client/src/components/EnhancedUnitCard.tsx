@@ -198,7 +198,7 @@ export default function EnhancedUnitCard({
   // Convert unit data to the format expected by EditableSpecificationForm
   const convertToSpecifications = () => {
     return [
-      { label: "SEER Rating", value: unit.seerRating.toString() },
+      { label: "SEER2 Rating", value: unit.seerRating.toString() },
       { label: "EER Rating", value: unit.eerRating?.toString() || "N/A" },
       { label: "HSPF Rating", value: unit.hspfRating?.toString() || "N/A" },
       { label: "Refrigerant", value: unit.refrigerant },

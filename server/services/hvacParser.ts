@@ -75,7 +75,12 @@ const BTU_MAPPINGS: Record<string, Record<string, number>> = {
     "09": 9000, "009": 9000, "12": 12000, "012": 12000, "18": 18000, "018": 18000, 
     "24": 24000, "024": 24000, "30": 30000, "030": 30000, "36": 36000, "036": 36000,
     "42": 42000, "042": 42000, "48": 48000, "048": 48000, "60": 60000, "060": 60000, 
-    "72": 72000, "072": 72000, "90": 9000, "090": 9000, "120": 12000, "180": 18000, "240": 24000
+    "72": 72000, "072": 72000, "90": 90000, "090": 90000, "120": 120000, "180": 180000, "240": 240000
+  },
+  // Daikin R-32 commercial package units - uses 3-digit capacity codes
+  daikin_r32: {
+    "036": 36000, "048": 48000, "060": 60000, "072": 72000, "090": 90000, "102": 102000,
+    "120": 120000, "150": 150000, "180": 180000, "240": 240000, "300": 300000
   }
 };
 
@@ -100,10 +105,21 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
     ],
     parser: (modelNumber, match) => {
       const sizeCode = match[2] || match[3];
-      // Normalize 3-digit Asian codes to 2-digit for proper BTU mapping
-      const normalizedSize = sizeCode.length === 3 && parseInt(sizeCode) <= 240 ? 
-                            String(parseInt(sizeCode) / 10).padStart(2, '0') : sizeCode;
-      const btuCapacity = BTU_MAPPINGS.asian[normalizedSize] || BTU_MAPPINGS.asian[sizeCode];
+      
+      // Try exact mapping first, then fallback to normalized for specific whitelist only
+      let btuCapacity = BTU_MAPPINGS.asian[sizeCode];
+      
+      if (!btuCapacity && sizeCode.length === 3) {
+        // Only normalize specific small capacity codes (009/012/015/018/024/030/036)
+        const numericCode = parseInt(sizeCode);
+        const normalizationWhitelist = [9, 12, 15, 18, 24, 30, 36];
+        
+        if (normalizationWhitelist.includes(numericCode)) {
+          const normalizedSize = String(numericCode).padStart(2, '0');
+          btuCapacity = BTU_MAPPINGS.asian[normalizedSize];
+        }
+      }
+      
       if (!btuCapacity) return null;
       
       const systemType = modelNumber.includes("LSU") || modelNumber.includes("LSN") ? "Heat Pump" : "Straight A/C";
@@ -116,9 +132,10 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "19" },
+          { label: "SEER2 Rating", value: "19.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "65", unit: "dB" }
+          { label: "Sound Level", value: "65", unit: "dB" },
+          { label: "Application", value: "Mini-Split" }
         ]
       };
     }
@@ -132,10 +149,21 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
     ],
     parser: (modelNumber, match) => {
       const sizeCode = match[2] || match[3];
-      // Normalize 3-digit Asian codes to 2-digit for proper BTU mapping
-      const normalizedSize = sizeCode.length === 3 && parseInt(sizeCode) <= 240 ? 
-                            String(parseInt(sizeCode) / 10).padStart(2, '0') : sizeCode;
-      const btuCapacity = BTU_MAPPINGS.asian[normalizedSize] || BTU_MAPPINGS.asian[sizeCode];
+      
+      // Try exact mapping first, then fallback to normalized for specific whitelist only
+      let btuCapacity = BTU_MAPPINGS.asian[sizeCode];
+      
+      if (!btuCapacity && sizeCode.length === 3) {
+        // Only normalize specific small capacity codes (009/012/015/018/024/030/036)
+        const numericCode = parseInt(sizeCode);
+        const normalizationWhitelist = [9, 12, 15, 18, 24, 30, 36];
+        
+        if (normalizationWhitelist.includes(numericCode)) {
+          const normalizedSize = String(numericCode).padStart(2, '0');
+          btuCapacity = BTU_MAPPINGS.asian[normalizedSize];
+        }
+      }
+      
       if (!btuCapacity) return null;
       
       const systemType = modelNumber.includes("MSZ") || modelNumber.includes("PLA") ? "Heat Pump" : "Straight A/C";
@@ -148,9 +176,10 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "22" },
+          { label: "SEER2 Rating", value: "22.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "58", unit: "dB" }
+          { label: "Sound Level", value: "58", unit: "dB" },
+          { label: "Application", value: "Mini-Split" }
         ]
       };
     }
@@ -178,9 +207,10 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "72", unit: "dB" }
+          { label: "Sound Level", value: "72", unit: "dB" },
+          { label: "Application", value: "Package Unit" }
         ]
       };
     }
@@ -207,9 +237,10 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "72", unit: "dB" }
+          { label: "Sound Level", value: "72", unit: "dB" },
+          { label: "Application", value: "Package Unit" }
         ]
       };
     }
@@ -237,7 +268,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "71", unit: "dB" }
         ]
@@ -266,7 +297,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "71", unit: "dB" }
         ]
@@ -295,7 +326,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230", 
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "73", unit: "dB" }
         ]
@@ -324,7 +355,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1", 
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "74", unit: "dB" }
         ]
@@ -353,7 +384,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "75", unit: "dB" }
         ]
@@ -382,7 +413,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "73", unit: "dB" }
         ]
@@ -412,7 +443,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "74", unit: "dB" }
         ]
@@ -442,7 +473,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "73", unit: "dB" }
         ]
@@ -472,7 +503,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230", 
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "75", unit: "dB" }
         ]
@@ -502,7 +533,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "74", unit: "dB" }
         ]
@@ -532,7 +563,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "74", unit: "dB" }
         ]
@@ -562,7 +593,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "75", unit: "dB" }
         ]
@@ -592,7 +623,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "75", unit: "dB" }
         ]
@@ -622,7 +653,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "14" },
+          { label: "SEER2 Rating", value: "14.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "75", unit: "dB" }
         ]
@@ -652,7 +683,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "13" },
+          { label: "SEER2 Rating", value: "13.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "76", unit: "dB" }
         ]
@@ -682,7 +713,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "13" },
+          { label: "SEER2 Rating", value: "13.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "76", unit: "dB" }
         ]
@@ -712,7 +743,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "15" },
+          { label: "SEER2 Rating", value: "15.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "74", unit: "dB" }
         ]
@@ -742,7 +773,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "16" },
+          { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "73", unit: "dB" }
         ]
@@ -772,7 +803,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "13" },
+          { label: "SEER2 Rating", value: "13.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "76", unit: "dB" }
         ]
@@ -801,7 +832,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "19" },
+          { label: "SEER2 Rating", value: "19.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "65", unit: "dB" }
         ]
@@ -830,38 +861,80 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "22" },
+          { label: "SEER2 Rating", value: "22.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "58", unit: "dB" }
         ]
       };
     }
   },
-  // DAIKIN (for cross-reference)
+  // DAIKIN R-32 PACKAGE UNITS (Commercial)
   {
     name: "Daikin",
     patterns: [
-      /^([A-Z]{2,4})([0-9]{2,3})[A-Z0-9]*$/i, // DX16SA0361, DZ16SA0481
-      /^([0-9]{2,3})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i
+      // Daikin R-32 models: DSC036D1XXXCAXAXADXXXXXXX, DHC048D1XXXBAXAXADXXXXXXX, etc.
+      /^(DSC|DHC|DHG|DHH|DSG|DSH)([0-9]{3})([A-Z])([0-9])[A-Z0-9]*$/i, 
+      // Legacy patterns for older Daikin models
+      /^(DX|DZ)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.asian[sizeCode];
+      const seriesPrefix = match[1];
+      const sizeCode = match[2];
+      const voltageCode = match[3]; // Position 7 voltage code
+      const phaseCode = match[4]; // Position 8 phase code
+      
+      // Use proper Daikin R-32 BTU mapping for new series, Asian mapping for legacy
+      const isR32Series = ["DSC", "DHC", "DHG", "DHH", "DSG", "DSH"].includes(seriesPrefix.toUpperCase());
+      const btuCapacity = isR32Series ? 
+        BTU_MAPPINGS.daikin_r32[sizeCode] : 
+        BTU_MAPPINGS.asian[sizeCode];
+      
       if (!btuCapacity) return null;
       
-      const systemType = modelNumber.includes("DZ") || modelNumber.includes("DX") ? "Heat Pump" : "Straight A/C";
+      // Extract voltage and phase from position codes for R-32 series
+      let voltage = "208-230";
+      let phases = "1";
+      
+      if (isR32Series && voltageCode && phaseCode) {
+        voltage = VOLTAGE_MAPPINGS[voltageCode] || "208-230";
+        phases = PHASE_MAPPINGS[phaseCode] || "1";
+      }
+      
+      // Determine system type based on series prefix
+      let systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
+      if (["DHH", "DSH"].includes(seriesPrefix.toUpperCase())) {
+        systemType = "Heat Pump";
+      } else if (["DHG", "DSG"].includes(seriesPrefix.toUpperCase())) {
+        systemType = "Gas/Electric";
+      } else {
+        systemType = "Straight A/C";
+      }
+      
+      // Legacy DX/DZ pattern system type determination
+      if (["DZ", "DX"].includes(seriesPrefix.toUpperCase())) {
+        systemType = seriesPrefix.toUpperCase() === "DZ" ? "Heat Pump" : "Straight A/C";
+      }
+      
+      // Determine specifications based on series and efficiency tier
+      const isHighEfficiency = seriesPrefix.charAt(1) === 'H';
+      const refrigerant = isR32Series ? "R-32" : "R-410A";
+      const seerRating = isR32Series ? (isHighEfficiency ? "16.7" : "14.0") : "20.0";
+      const soundLevel = isR32Series ? "70" : "62";
       
       return {
         manufacturer: "Daikin",
         confidence: 95,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
-        phases: "1",
+        voltage,
+        phases,
         specifications: [
-          { label: "SEER Rating", value: "20" },
-          { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "62", unit: "dB" }
+          { label: "SEER2 Rating", value: seerRating },
+          { label: "Refrigerant", value: refrigerant },
+          { label: "Sound Level", value: soundLevel, unit: "dB" },
+          { label: "Drive Type", value: "Variable Speed" },
+          { label: "Series", value: seriesPrefix.toUpperCase() },
+          { label: "Application", value: "Package Unit" }
         ]
       };
     }
@@ -889,7 +962,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         voltage: "208-230",
         phases: "1",
         specifications: [
-          { label: "SEER Rating", value: "15" },
+          { label: "SEER2 Rating", value: "15.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "74", unit: "dB" }
         ]

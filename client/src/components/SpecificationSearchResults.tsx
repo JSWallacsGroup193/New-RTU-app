@@ -210,7 +210,7 @@ export default function SpecificationSearchResults({
   const enhancedUnits: EnhancedUnit[] = useMemo(() => {
     return searchResults.results.map(unit => {
       // Extract authentic values from specifications array
-      const seerRating = extractSpecificationValue(unit.specifications, "SEER Rating") as number || 16.0;
+      const seerRating = extractSpecificationValue(unit.specifications, "SEER2 Rating") as number || extractSpecificationValue(unit.specifications, "SEER Rating") as number || 16.0;
       const soundLevel = extractSpecificationValue(unit.specifications, "Sound Level") as number || 65;
       const driveType = extractSpecificationValue(unit.specifications, "Drive Type") as string || "Variable Speed";
       const coolingStages = extractSpecificationValue(unit.specifications, "Cooling Stages") as number || 1;

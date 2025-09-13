@@ -10,7 +10,7 @@ export default function ReplacementGridExample() {
       voltage: "460",
       phases: "3",
       specifications: [
-        { label: "SEER Rating", value: "16" },
+        { label: "SEER2 Rating", value: "16" },
         { label: "Sound Level", value: "70", unit: "dB" }
       ],
       sizeMatch: "smaller" as const
@@ -23,7 +23,7 @@ export default function ReplacementGridExample() {
       voltage: "460", 
       phases: "3",
       specifications: [
-        { label: "SEER Rating", value: "16" },
+        { label: "SEER2 Rating", value: "16" },
         { label: "Sound Level", value: "72", unit: "dB" }
       ],
       sizeMatch: "direct" as const
@@ -36,7 +36,7 @@ export default function ReplacementGridExample() {
       voltage: "460",
       phases: "3",
       specifications: [
-        { label: "SEER Rating", value: "16" },
+        { label: "SEER2 Rating", value: "16" },
         { label: "Sound Level", value: "74", unit: "dB" }
       ],
       sizeMatch: "larger" as const

@@ -9,7 +9,7 @@ import { DollarSign, Package, Settings } from "lucide-react";
 
 // Demo data
 const demoSpecifications = [
-  { label: "SEER Rating", value: "16.6" },
+  { label: "SEER2 Rating", value: "16.6" },
   { label: "EER Rating", value: "12.5" },
   { label: "Refrigerant", value: "R-32" },
   { label: "Sound Level", value: "64", unit: "dB" },

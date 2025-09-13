@@ -217,8 +217,8 @@ export class PDFService {
     this.currentY += 15;
 
     // Get SEER values for comparison
-    const originalSeer = this.getSpecValue(original.specifications, 'SEER') || 
-                        this.getSpecValue(original.specifications, 'SEER Rating') || 
+    const originalSeer = this.getSpecValue(original.specifications, 'SEER2 Rating') || 
+                        this.getSpecValue(original.specifications, 'SEER') || 
                         'N/A';
     const replacementSeer = replacement.seerRating || 
                            this.getSpecValue(replacement.specifications, 'SEER') || 
@@ -233,7 +233,7 @@ export class PDFService {
       ['BTU Capacity', this.formatBTU(original.btuCapacity), this.formatBTU(replacement.btuCapacity), this.getSizeMatch(replacement.sizeMatch)],
       ['Voltage', original.voltage, replacement.voltage, this.getVoltageMatch(original.voltage, replacement.voltage)],
       ['Phases', original.phases, replacement.phases, this.getPhaseMatch(original.phases, replacement.phases)],
-      ['SEER Rating', originalSeer, replacementSeer, this.getEfficiencyImprovement(originalSeer, replacementSeer)],
+      ['SEER2 Rating', originalSeer, replacementSeer, this.getEfficiencyImprovement(originalSeer, replacementSeer)],
       ['Refrigerant', this.getSpecValue(original.specifications, 'Refrigerant') || 'R-410A', replacement.refrigerant || 'R-32', 'Eco-Friendly'],
       ['Drive Type', this.getSpecValue(original.specifications, 'Drive Type') || 'Fixed', replacement.driveType || 'Variable', 'Advanced Control'],
       ['Sound Level', this.getSpecValue(original.specifications, 'Sound Level') || 'N/A', replacement.soundLevel ? `${replacement.soundLevel} dB` : 'N/A', 'Quieter Operation']

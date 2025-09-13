@@ -174,7 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               voltage: unit.voltage,
               phases: unit.phases,
               specifications: [
-                { label: "SEER Rating", value: unit.seerRating.toString(), unit: "BTU/Wh" },
+                { label: "SEER2 Rating", value: unit.seerRating.toString(), unit: "BTU/Wh" },
                 { label: "Sound Level", value: unit.soundLevel.toString(), unit: "dB" },
                 { label: "Refrigerant", value: unit.refrigerant },
                 { label: "Drive Type", value: unit.driveType },
@@ -202,7 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               voltage: unit.voltage,
               phases: unit.phases,
               specifications: [
-                { label: "SEER Rating", value: unit.seerRating.toString(), unit: "BTU/Wh" },
+                { label: "SEER2 Rating", value: unit.seerRating.toString(), unit: "BTU/Wh" },
                 { label: "Sound Level", value: unit.soundLevel.toString(), unit: "dB" },
                 { label: "Refrigerant", value: unit.refrigerant },
                 { label: "Drive Type", value: unit.driveType },

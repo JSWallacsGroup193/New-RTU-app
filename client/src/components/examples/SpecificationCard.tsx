@@ -2,7 +2,7 @@ import SpecificationCard from '../SpecificationCard';
 
 export default function SpecificationCardExample() {
   const mockSpecs = [
-    { label: "SEER Rating", value: "16", unit: "" },
+    { label: "SEER2 Rating", value: "16", unit: "" },
     { label: "Refrigerant", value: "R-410A", unit: "" },
     { label: "Sound Level", value: "72", unit: "dB" },
     { label: "Dimensions", value: "48 x 48 x 36", unit: "in" },

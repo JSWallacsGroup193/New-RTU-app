@@ -1302,7 +1302,7 @@ export class DaikinMatcher {
    */
   private convertToLegacySpecs(unit: DaikinUnitSpec): Array<{label: string; value: string; unit?: string}> {
     const specs = [
-      { label: "SEER Rating", value: unit.seerRating.toString() },
+      { label: "SEER2 Rating", value: unit.seerRating.toString() },
       { label: "Refrigerant", value: unit.refrigerant },
       { label: "Sound Level", value: unit.soundLevel.toString(), unit: "dB" },
       { label: "Dimensions", value: `${unit.dimensions.length} x ${unit.dimensions.width} x ${unit.dimensions.height}`, unit: "in" },
