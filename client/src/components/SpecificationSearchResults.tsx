@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
   ArrowLeft, 
   Search, 
@@ -19,7 +21,10 @@ import {
   Trash2,
   SlidersHorizontal,
   ChevronDown,
-  CheckSquare
+  CheckSquare,
+  Save,
+  FolderPlus,
+  Plus
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { SpecSearchResponse, type SpecSearchInput } from "@shared/schema";
@@ -27,7 +32,9 @@ import EnhancedUnitCard from "./EnhancedUnitCard";
 import InlineEditControls from "./InlineEditControls";
 import SystemTypeFilter from "./SystemTypeFilter";
 import ComparisonTable from "./ComparisonTable";
+import CreateProjectForm from "./CreateProjectForm";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { exportSingleComparison, exportBulkComparison } from "@/lib/pdfService";
 
 // Authentic Daikin catalog data
@@ -183,7 +190,22 @@ export default function SpecificationSearchResults({
 
   // PDF Export state management
   const [isExporting, setIsExporting] = useState(false);
+  
+  // Project integration state
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [isSavingToProject, setIsSavingToProject] = useState(false);
   const { toast } = useToast();
+
+  // Fetch user's projects for the dropdown
+  const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
+    queryKey: ['/api/projects'],
+    queryFn: () => fetch('/api/projects').then(res => {
+      if (!res.ok) throw new Error('Failed to fetch projects');
+      return res.json();
+    })
+  });
 
   // Transform search results to enhanced units using AUTHENTIC Daikin specifications
   const enhancedUnits: EnhancedUnit[] = useMemo(() => {
@@ -386,9 +408,140 @@ export default function SpecificationSearchResults({
     // TODO: Implement modal or detailed view
   };
 
+  // Save units to project mutation
+  const saveToProjectMutation = useMutation({
+    mutationFn: async ({ projectId, units }: { projectId: string; units: any[] }) => {
+      const response = await fetch(`/api/projects/${projectId}/units`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ units })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save units to project');
+      }
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', variables.projectId] });
+      toast({
+        title: "Units Saved to Project",
+        description: `${variables.units.length} unit(s) have been saved to your project successfully.`,
+      });
+      setIsProjectDialogOpen(false);
+      setSelectedProjectId("");
+      setSelectedUnits(new Set());
+    },
+    onError: (error) => {
+      toast({
+        title: "Save Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
   const handleAddToProject = (unit: EnhancedUnit) => {
-    console.log("Add to project:", unit.modelNumber);
-    // TODO: Implement project management
+    // Set selected unit and open project dialog
+    setSelectedUnits(new Set([unit.id]));
+    setIsProjectDialogOpen(true);
+  };
+
+  const handleSaveToProject = async () => {
+    if (!selectedProjectId) {
+      toast({
+        title: "No Project Selected",
+        description: "Please select a project to save the units to.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const selectedEnhancedUnits = filteredAndSortedUnits.filter(unit => selectedUnits.has(unit.id));
+    
+    if (selectedEnhancedUnits.length === 0) {
+      toast({
+        title: "No Units Selected",
+        description: "Please select at least one unit to save to the project.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check project capacity before saving
+    const selectedProject = projects.find(p => p.id === selectedProjectId);
+    if (selectedProject) {
+      const currentUnits = selectedProject.items?.length || 0;
+      const totalAfterSave = currentUnits + selectedEnhancedUnits.length;
+      
+      if (totalAfterSave > 20) {
+        toast({
+          title: "Project Limit Exceeded",
+          description: `This project already has ${currentUnits} units. Adding ${selectedEnhancedUnits.length} more would exceed the 20-unit limit. Please select fewer units or choose a different project.`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
+    // Create original unit from search parameters for comparison
+    const originalUnit = {
+      modelNumber: "Search Specifications",
+      manufacturer: "Various",
+      confidence: 100,
+      systemType: searchParams.systemType,
+      btuCapacity: parseFloat(searchParams.tonnage) * 12000,
+      voltage: searchParams.voltage,
+      phases: searchParams.phases,
+      specifications: [
+        { label: "System Type", value: searchParams.systemType },
+        { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" },
+        { label: "Voltage", value: searchParams.voltage, unit: "V" },
+        { label: "Phases", value: searchParams.phases }
+      ]
+    };
+
+    // Convert enhanced units to project format
+    const projectUnits = selectedEnhancedUnits.map(unit => ({
+      originalUnit,
+      chosenReplacement: {
+        id: unit.id,
+        modelNumber: unit.modelNumber,
+        systemType: unit.systemType,
+        btuCapacity: unit.btuCapacity,
+        voltage: unit.voltage,
+        phases: unit.phases,
+        sizeMatch: unit.sizeMatch,
+        seerRating: unit.seerRating,
+        eerRating: unit.eerRating,
+        hspfRating: unit.hspfRating,
+        refrigerant: unit.refrigerant,
+        driveType: unit.driveType,
+        soundLevel: unit.soundLevel,
+        dimensions: unit.dimensions,
+        weight: unit.weight,
+        tonnage: unit.tonnage
+      },
+      configuration: {},
+      notes: "",
+      status: "pending"
+    }));
+
+    setIsSavingToProject(true);
+    try {
+      await saveToProjectMutation.mutateAsync({
+        projectId: selectedProjectId,
+        units: projectUnits
+      });
+    } finally {
+      setIsSavingToProject(false);
+    }
+  };
+
+  const handleCreateProjectWithUnits = () => {
+    setIsCreateProjectOpen(true);
+    setIsProjectDialogOpen(false);
   };
 
   const handleGenerateQuote = (unit: EnhancedUnit) => {
@@ -816,6 +969,97 @@ export default function SpecificationSearchResults({
                 </Button>
               </div>
               <div className="flex items-center gap-2">
+                <Dialog open={isProjectDialogOpen} onOpenChange={setIsProjectDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      data-testid="button-save-to-project-spec"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save to Project ({selectedUnits.size})
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <FolderPlus className="h-5 w-5" />
+                        Save Units to Project
+                      </DialogTitle>
+                      <DialogDescription>
+                        Save {selectedUnits.size} selected unit{selectedUnits.size > 1 ? 's' : ''} to an existing project or create a new one.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-3">
+                        <label className="text-sm font-medium">Select Project</label>
+                        <Select 
+                          value={selectedProjectId} 
+                          onValueChange={setSelectedProjectId}
+                          disabled={isLoadingProjects}
+                        >
+                          <SelectTrigger data-testid="select-project-spec">
+                            <SelectValue placeholder={isLoadingProjects ? "Loading projects..." : "Choose a project..."} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {projects.map((project: any) => {
+                              const unitCount = project.items?.length || 0;
+                              const remainingCapacity = 20 - unitCount;
+                              const canFitSelection = remainingCapacity >= selectedUnits.size;
+                              
+                              return (
+                                <SelectItem 
+                                  key={project.id} 
+                                  value={project.id}
+                                  disabled={!canFitSelection}
+                                  className={!canFitSelection ? "opacity-50" : ""}
+                                >
+                                  <div className="flex items-center justify-between w-full">
+                                    <span className="truncate">{project.name}</span>
+                                    <div className="flex items-center gap-2 ml-2">
+                                      <Badge variant={canFitSelection ? "secondary" : "destructive"} className="text-xs">
+                                        {unitCount}/20 units
+                                      </Badge>
+                                      {!canFitSelection && (
+                                        <span className="text-xs text-destructive">Full</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        
+                        {projects.length === 0 && !isLoadingProjects && (
+                          <p className="text-sm text-muted-foreground">No projects found. Create your first project below.</p>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={handleCreateProjectWithUnits}
+                          className="flex-1 gap-2"
+                          data-testid="button-create-new-project-spec"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Create New Project
+                        </Button>
+                        <Button
+                          onClick={handleSaveToProject}
+                          disabled={!selectedProjectId || isSavingToProject}
+                          className="flex-1"
+                          data-testid="button-confirm-save-project-spec"
+                        >
+                          {isSavingToProject ? "Saving..." : "Save to Project"}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -925,6 +1169,39 @@ export default function SpecificationSearchResults({
           </Button>
         )}
       </div>
+
+      {/* Create Project Dialog */}
+      <Dialog open={isCreateProjectOpen} onOpenChange={setIsCreateProjectOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <CreateProjectForm 
+            onSuccess={(projectId) => {
+              setIsCreateProjectOpen(false);
+              setSelectedProjectId(projectId);
+              setIsProjectDialogOpen(true);
+            }}
+            onCancel={() => setIsCreateProjectOpen(false)}
+            initialUnit={selectedUnits.size > 0 ? {
+              originalUnit: {
+                modelNumber: "Search Specifications",
+                manufacturer: "Various",
+                confidence: 100,
+                systemType: searchParams.systemType,
+                btuCapacity: parseFloat(searchParams.tonnage) * 12000,
+                voltage: searchParams.voltage,
+                phases: searchParams.phases,
+                specifications: [
+                  { label: "System Type", value: searchParams.systemType },
+                  { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" }
+                ]
+              },
+              replacement: (() => {
+                const selectedEnhancedUnits = filteredAndSortedUnits.filter(unit => selectedUnits.has(unit.id));
+                return selectedEnhancedUnits[0] || null;
+              })()
+            } : undefined}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

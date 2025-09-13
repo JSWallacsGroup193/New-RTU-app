@@ -16,7 +16,15 @@ import {
   advancedMatchingRequestSchema,
   advancedMatchingResponseSchema,
   familyValidationRequestSchema,
-  familyValidationResponseSchema
+  familyValidationResponseSchema,
+  insertUserSchema,
+  insertProjectSchema,
+  insertProjectUnitSchema,
+  createProjectRequestSchema,
+  updateProjectRequestSchema,
+  addUnitToProjectRequestSchema,
+  projectListResponseSchema,
+  projectDetailResponseSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -663,6 +671,470 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ],
       outputBrand: "Daikin"
     });
+  });
+
+  // ============================================================================
+  // PROJECT MANAGEMENT API ENDPOINTS
+  // ============================================================================
+
+  // User Management Endpoints
+  
+  // Create user profile
+  app.post("/api/users", async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(userData.email);
+      if (existingUser) {
+        return res.status(409).json({
+          error: "User already exists",
+          message: "A user with this email address already exists"
+        });
+      }
+      
+      const user = await storage.createUser(userData);
+      res.status(201).json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid user data",
+          details: error.errors
+        });
+      }
+      console.error("Create user error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while creating the user"
+      });
+    }
+  });
+
+  // Get user by ID
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUserById(req.params.id);
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found",
+          message: "User with the specified ID does not exist"
+        });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Get user error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while retrieving the user"
+      });
+    }
+  });
+
+  // Update user profile
+  app.put("/api/users/:id", async (req, res) => {
+    try {
+      const userData = insertUserSchema.partial().parse(req.body);
+      const user = await storage.updateUser(req.params.id, userData);
+      
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found",
+          message: "User with the specified ID does not exist"
+        });
+      }
+      
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid user data",
+          details: error.errors
+        });
+      }
+      console.error("Update user error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while updating the user"
+      });
+    }
+  });
+
+  // Get user by email (for login/authentication)
+  app.get("/api/users/email/:email", async (req, res) => {
+    try {
+      const user = await storage.getUserByEmail(req.params.email);
+      if (!user) {
+        return res.status(404).json({
+          error: "User not found",
+          message: "User with the specified email does not exist"
+        });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Get user by email error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while retrieving the user"
+      });
+    }
+  });
+
+  // Project Management Endpoints
+
+  // Create new project
+  app.post("/api/projects", async (req, res) => {
+    try {
+      const projectData = createProjectRequestSchema.parse(req.body);
+      
+      // Convert to insertProjectSchema format
+      const insertData = {
+        name: projectData.name,
+        ownerId: req.body.ownerId, // This should come from authentication in real app
+        description: projectData.description,
+        customerName: projectData.customerName,
+        customerLocation: projectData.customerLocation,
+        projectDate: projectData.projectDate ? new Date(projectData.projectDate) : undefined,
+        status: "draft" as const
+      };
+      
+      const project = await storage.createProject(insertData);
+      res.status(201).json(project);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid project data",
+          details: error.errors
+        });
+      }
+      console.error("Create project error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while creating the project"
+      });
+    }
+  });
+
+  // List projects for user
+  app.get("/api/projects", async (req, res) => {
+    try {
+      const ownerId = req.query.ownerId as string;
+      const search = req.query.search as string;
+      
+      if (!ownerId) {
+        return res.status(400).json({
+          error: "Missing parameter",
+          message: "ownerId query parameter is required"
+        });
+      }
+      
+      const projects = search 
+        ? await storage.searchProjects(ownerId, search)
+        : await storage.listProjectsByOwner(ownerId);
+      
+      // Enhance with unit counts
+      const enhancedProjects = await Promise.all(
+        projects.map(async (project) => {
+          const unitCount = await storage.getProjectUnitCount(project.id);
+          return {
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            customerName: project.customerName,
+            status: project.status,
+            unitCount,
+            remainingCapacity: 20 - unitCount,
+            createdAt: project.createdAt.toISOString(),
+            updatedAt: project.updatedAt.toISOString()
+          };
+        })
+      );
+      
+      const response = {
+        projects: enhancedProjects,
+        totalCount: enhancedProjects.length
+      };
+      
+      const validatedResponse = projectListResponseSchema.parse(response);
+      res.json(validatedResponse);
+    } catch (error) {
+      console.error("List projects error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while retrieving projects"
+      });
+    }
+  });
+
+  // Get project by ID with units
+  app.get("/api/projects/:id", async (req, res) => {
+    try {
+      const project = await storage.getProjectById(req.params.id);
+      if (!project) {
+        return res.status(404).json({
+          error: "Project not found",
+          message: "Project with the specified ID does not exist"
+        });
+      }
+      
+      const units = await storage.getProjectUnits(project.id);
+      const unitCount = units.length;
+      
+      const response = {
+        project: {
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          customerName: project.customerName,
+          customerLocation: project.customerLocation,
+          status: project.status,
+          createdAt: project.createdAt.toISOString(),
+          updatedAt: project.updatedAt.toISOString()
+        },
+        units: units.map(unit => ({
+          id: unit.id,
+          originalModelNumber: unit.originalModelNumber,
+          originalManufacturer: unit.originalManufacturer,
+          chosenReplacementModel: unit.chosenReplacementModel,
+          configuration: unit.configuration,
+          notes: unit.notes,
+          status: unit.status,
+          createdAt: unit.createdAt.toISOString()
+        })),
+        unitCount,
+        remainingCapacity: 20 - unitCount
+      };
+      
+      const validatedResponse = projectDetailResponseSchema.parse(response);
+      res.json(validatedResponse);
+    } catch (error) {
+      console.error("Get project error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while retrieving the project"
+      });
+    }
+  });
+
+  // Update project
+  app.put("/api/projects/:id", async (req, res) => {
+    try {
+      const projectData = updateProjectRequestSchema.parse(req.body);
+      
+      // Convert to insertProjectSchema format for updates
+      const updateData: any = {};
+      if (projectData.name) updateData.name = projectData.name;
+      if (projectData.description !== undefined) updateData.description = projectData.description;
+      if (projectData.customerName !== undefined) updateData.customerName = projectData.customerName;
+      if (projectData.customerLocation !== undefined) updateData.customerLocation = projectData.customerLocation;
+      if (projectData.projectDate) updateData.projectDate = new Date(projectData.projectDate);
+      
+      const project = await storage.updateProject(req.params.id, updateData);
+      
+      if (!project) {
+        return res.status(404).json({
+          error: "Project not found",
+          message: "Project with the specified ID does not exist"
+        });
+      }
+      
+      res.json(project);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid project data",
+          details: error.errors
+        });
+      }
+      console.error("Update project error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while updating the project"
+      });
+    }
+  });
+
+  // Delete project
+  app.delete("/api/projects/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteProject(req.params.id);
+      
+      if (!success) {
+        return res.status(404).json({
+          error: "Project not found",
+          message: "Project with the specified ID does not exist"
+        });
+      }
+      
+      res.json({ success: true, message: "Project deleted successfully" });
+    } catch (error) {
+      console.error("Delete project error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while deleting the project"
+      });
+    }
+  });
+
+  // Project Unit Management Endpoints
+
+  // Add unit to project
+  app.post("/api/projects/:projectId/units", async (req, res) => {
+    try {
+      // Check project capacity first
+      const canAdd = await storage.canAddUnitsToProject(req.params.projectId, 1);
+      if (!canAdd) {
+        return res.status(400).json({
+          error: "Project capacity exceeded",
+          message: "This project has reached the maximum limit of 20 units"
+        });
+      }
+      
+      const unitData = {
+        projectId: req.params.projectId,
+        originalModelNumber: req.body.originalUnit.modelNumber,
+        originalManufacturer: req.body.originalUnit.manufacturer,
+        chosenReplacementId: req.body.chosenReplacement.id,
+        chosenReplacementModel: req.body.chosenReplacement.modelNumber,
+        configuration: req.body.configuration || {},
+        notes: req.body.notes || "",
+        status: "pending" as const
+      };
+      
+      const projectUnit = await storage.addUnitToProject(unitData);
+      res.status(201).json(projectUnit);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("maximum limit")) {
+        return res.status(400).json({
+          error: "Project capacity exceeded",
+          message: error.message
+        });
+      }
+      console.error("Add unit to project error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while adding the unit to the project"
+      });
+    }
+  });
+
+  // Remove unit from project
+  app.delete("/api/projects/:projectId/units/:unitId", async (req, res) => {
+    try {
+      const success = await storage.removeUnitFromProject(req.params.unitId);
+      
+      if (!success) {
+        return res.status(404).json({
+          error: "Unit not found",
+          message: "Unit with the specified ID does not exist"
+        });
+      }
+      
+      res.json({ success: true, message: "Unit removed from project successfully" });
+    } catch (error) {
+      console.error("Remove unit from project error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while removing the unit from the project"
+      });
+    }
+  });
+
+  // Update project unit
+  app.put("/api/projects/:projectId/units/:unitId", async (req, res) => {
+    try {
+      const updateData: any = {};
+      if (req.body.configuration !== undefined) updateData.configuration = req.body.configuration;
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      if (req.body.status !== undefined) updateData.status = req.body.status;
+      
+      const unit = await storage.updateProjectUnit(req.params.unitId, updateData);
+      
+      if (!unit) {
+        return res.status(404).json({
+          error: "Unit not found",
+          message: "Unit with the specified ID does not exist"
+        });
+      }
+      
+      res.json(unit);
+    } catch (error) {
+      console.error("Update project unit error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while updating the unit"
+      });
+    }
+  });
+
+  // Get project capacity information
+  app.get("/api/projects/:id/capacity", async (req, res) => {
+    try {
+      const project = await storage.getProjectById(req.params.id);
+      if (!project) {
+        return res.status(404).json({
+          error: "Project not found",
+          message: "Project with the specified ID does not exist"
+        });
+      }
+      
+      const currentCount = await storage.getProjectUnitCount(req.params.id);
+      const remainingCapacity = await storage.getRemainingProjectCapacity(req.params.id);
+      
+      res.json({
+        projectId: req.params.id,
+        currentCount,
+        remainingCapacity,
+        maxCapacity: 20,
+        canAddMore: remainingCapacity > 0
+      });
+    } catch (error) {
+      console.error("Get project capacity error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while retrieving project capacity"
+      });
+    }
+  });
+
+  // Get recent projects for user dashboard
+  app.get("/api/users/:userId/recent-projects", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
+      const projects = await storage.getRecentProjects(req.params.userId, limit);
+      
+      // Enhance with unit counts
+      const enhancedProjects = await Promise.all(
+        projects.map(async (project) => {
+          const unitCount = await storage.getProjectUnitCount(project.id);
+          return {
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            customerName: project.customerName,
+            status: project.status,
+            unitCount,
+            remainingCapacity: 20 - unitCount,
+            createdAt: project.createdAt.toISOString(),
+            updatedAt: project.updatedAt.toISOString()
+          };
+        })
+      );
+      
+      res.json({
+        projects: enhancedProjects,
+        totalCount: enhancedProjects.length
+      });
+    } catch (error) {
+      console.error("Get recent projects error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while retrieving recent projects"
+      });
+    }
   });
 
   const httpServer = createServer(app);

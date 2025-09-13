@@ -6,12 +6,18 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 import Header from "@/components/Header";
 import HVACDecoder from "@/components/HVACDecoder";
+import UserProfile from "@/pages/UserProfile";
+import ProjectDashboard from "@/pages/ProjectDashboard";
+import ProjectDetail from "@/pages/ProjectDetail";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HVACDecoder} />
+      <Route path="/projects" component={ProjectDashboard} />
+      <Route path="/projects/:id" component={ProjectDetail} />
+      <Route path="/profile" component={UserProfile} />
       <Route component={NotFound} />
     </Switch>
   );

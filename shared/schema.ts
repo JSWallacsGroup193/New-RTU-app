@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, boolean, timestamp, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -912,3 +912,143 @@ export const positionBasedSpecSearchResponseSchema = z.object({
 });
 
 export type PositionBasedSpecSearchResponse = z.infer<typeof positionBasedSpecSearchResponseSchema>;
+
+// ============================================================================
+// DATABASE TABLE DEFINITIONS FOR PROJECT MANAGEMENT
+// ============================================================================
+
+// Users table for profile management
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  company: text("company"),
+  preferences: json("preferences").default(sql`'{}'`),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`)
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+// Projects table
+export const projects = pgTable("projects", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  ownerId: varchar("owner_id").notNull(),
+  description: text("description"),
+  customerName: text("customer_name"),
+  customerLocation: text("customer_location"),
+  projectDate: timestamp("project_date"),
+  status: text("status").notNull().default("draft"), // draft, in_progress, completed
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`)
+});
+
+export const insertProjectSchema = createInsertSchema(projects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+export type Project = typeof projects.$inferSelect;
+
+// Project units table (junction table for project-unit relationships)
+export const projectUnits = pgTable("project_units", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  originalModelNumber: text("original_model_number").notNull(),
+  originalManufacturer: text("original_manufacturer").notNull(),
+  chosenReplacementId: text("chosen_replacement_id").notNull(),
+  chosenReplacementModel: text("chosen_replacement_model").notNull(),
+  configuration: json("configuration").default(sql`'{}'`), // electrical add-ons, accessories, etc.
+  notes: text("notes").default(""),
+  status: text("status").notNull().default("pending"), // pending, configured, approved, ordered
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`)
+});
+
+export const insertProjectUnitSchema = createInsertSchema(projectUnits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertProjectUnit = z.infer<typeof insertProjectUnitSchema>;
+export type ProjectUnit = typeof projectUnits.$inferSelect;
+
+// API request/response schemas for project operations
+export const createProjectRequestSchema = z.object({
+  name: z.string().min(1, "Project name is required"),
+  description: z.string().optional(),
+  customerName: z.string().optional(),
+  customerLocation: z.string().optional(),
+  projectDate: z.string().datetime().optional()
+});
+
+export const updateProjectRequestSchema = createProjectRequestSchema.partial();
+
+export const addUnitToProjectRequestSchema = z.object({
+  projectId: z.string(),
+  originalUnit: parsedModelSchema,
+  chosenReplacement: enhancedReplacementSchema,
+  configuration: z.object({
+    electricalAddOns: z.array(z.string()).default([]),
+    fieldAccessories: z.array(z.string()).default([]),
+    customOptions: z.record(z.string()).default({})
+  }).default({}),
+  notes: z.string().default("")
+});
+
+export const projectListResponseSchema = z.object({
+  projects: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    customerName: z.string().nullable().optional(),
+    status: z.string(),
+    unitCount: z.number(),
+    remainingCapacity: z.number(),
+    createdAt: z.string(),
+    updatedAt: z.string()
+  })),
+  totalCount: z.number()
+});
+
+export const projectDetailResponseSchema = z.object({
+  project: z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    customerName: z.string().nullable().optional(),
+    customerLocation: z.string().nullable().optional(),
+    status: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string()
+  }),
+  units: z.array(z.object({
+    id: z.string(),
+    originalModelNumber: z.string(),
+    originalManufacturer: z.string(),
+    chosenReplacementModel: z.string(),
+    configuration: z.record(z.any()).default({}),
+    notes: z.string(),
+    status: z.string(),
+    createdAt: z.string()
+  })),
+  unitCount: z.number(),
+  remainingCapacity: z.number()
+});
+
+export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
+export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
+export type AddUnitToProjectRequest = z.infer<typeof addUnitToProjectRequestSchema>;
+export type ProjectListResponse = z.infer<typeof projectListResponseSchema>;
+export type ProjectDetailResponse = z.infer<typeof projectDetailResponseSchema>;
