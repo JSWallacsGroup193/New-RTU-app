@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   ArrowLeft, 
   Search, 
@@ -17,13 +18,17 @@ import {
   GitCompare,
   Trash2,
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  CheckSquare
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { SpecSearchResponse, type SpecSearchInput } from "@shared/schema";
 import EnhancedUnitCard from "./EnhancedUnitCard";
 import InlineEditControls from "./InlineEditControls";
 import SystemTypeFilter from "./SystemTypeFilter";
+import ComparisonTable from "./ComparisonTable";
+import { useToast } from "@/hooks/use-toast";
+import { exportSingleComparison, exportBulkComparison } from "@/lib/pdfService";
 
 // Authentic Daikin catalog data
 const ELECTRICAL_ADD_ONS = [
@@ -175,6 +180,10 @@ export default function SpecificationSearchResults({
   const [maxSoundLevel, setMaxSoundLevel] = useState<number | undefined>();
   const [highEfficiencyOnly, setHighEfficiencyOnly] = useState(false);
   const [quietOperationOnly, setQuietOperationOnly] = useState(false);
+
+  // PDF Export state management
+  const [isExporting, setIsExporting] = useState(false);
+  const { toast } = useToast();
 
   // Transform search results to enhanced units using AUTHENTIC Daikin specifications
   const enhancedUnits: EnhancedUnit[] = useMemo(() => {
@@ -392,9 +401,156 @@ export default function SpecificationSearchResults({
     // TODO: Implement comparison view
   };
 
-  const handleExportSelected = () => {
-    console.log("Export units:", Array.from(selectedUnits));
-    // TODO: Implement export functionality
+  const handleExportSelected = async () => {
+    if (selectedUnits.size === 0) {
+      toast({
+        title: "No Units Selected",
+        description: "Please select at least one unit to export.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const selectedEnhancedUnits = filteredAndSortedUnits.filter(unit => selectedUnits.has(unit.id));
+      
+      // Create "original unit" from search parameters for comparison
+      const originalUnit = {
+        modelNumber: "Search Specifications",
+        manufacturer: "Various",
+        confidence: 100,
+        systemType: searchParams.systemType,
+        btuCapacity: parseFloat(searchParams.tonnage) * 12000, // Convert tonnage to BTU
+        voltage: searchParams.voltage,
+        phases: searchParams.phases,
+        specifications: [
+          { label: "System Type", value: searchParams.systemType },
+          { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" },
+          { label: "Voltage", value: searchParams.voltage, unit: "V" },
+          { label: "Phases", value: searchParams.phases },
+          { label: "Efficiency", value: searchParams.efficiency },
+          ...(searchParams.heatingBTU ? [{ label: "Heating BTU", value: searchParams.heatingBTU.toString(), unit: " BTU/hr" }] : []),
+          ...(searchParams.gasCategory ? [{ label: "Gas Type", value: searchParams.gasCategory }] : [])
+        ]
+      };
+
+      // Convert enhanced units to replacement format
+      const comparisons = selectedEnhancedUnits.map(unit => ({
+        original: originalUnit,
+        replacement: {
+          id: unit.id,
+          modelNumber: unit.modelNumber,
+          systemType: unit.systemType,
+          btuCapacity: unit.btuCapacity,
+          voltage: unit.voltage,
+          phases: unit.phases,
+          sizeMatch: unit.sizeMatch,
+          seerRating: unit.seerRating,
+          eerRating: unit.eerRating,
+          hspfRating: unit.hspfRating,
+          refrigerant: unit.refrigerant,
+          driveType: unit.driveType,
+          soundLevel: unit.soundLevel,
+          dimensions: unit.dimensions,
+          weight: unit.weight,
+          specifications: [
+            { label: "SEER", value: unit.seerRating.toString() },
+            { label: "Refrigerant", value: unit.refrigerant },
+            { label: "Drive Type", value: unit.driveType },
+            { label: "Sound Level", value: unit.soundLevel.toString(), unit: " dB" },
+            { label: "Weight", value: unit.weight.toString(), unit: " lbs" }
+          ]
+        }
+      }));
+
+      await exportBulkComparison(comparisons, {
+        includeProjectInfo: true,
+        includeEnvironmentalBenefits: true,
+        includeCostAnalysis: true
+      });
+
+      toast({
+        title: "Bulk PDF Export Successful",
+        description: `Multi-unit specification report with ${comparisons.length} units has been downloaded.`,
+      });
+    } catch (error) {
+      console.error("Bulk export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: "There was an error generating the bulk PDF report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportSingle = async (unit: EnhancedUnit) => {
+    setIsExporting(true);
+    try {
+      // Create "original unit" from search parameters for comparison
+      const originalUnit = {
+        modelNumber: "Search Specifications",
+        manufacturer: "Various",
+        confidence: 100,
+        systemType: searchParams.systemType,
+        btuCapacity: parseFloat(searchParams.tonnage) * 12000,
+        voltage: searchParams.voltage,
+        phases: searchParams.phases,
+        specifications: [
+          { label: "System Type", value: searchParams.systemType },
+          { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" },
+          { label: "Voltage", value: searchParams.voltage, unit: "V" },
+          { label: "Phases", value: searchParams.phases },
+          { label: "Efficiency", value: searchParams.efficiency }
+        ]
+      };
+
+      const replacement = {
+        id: unit.id,
+        modelNumber: unit.modelNumber,
+        systemType: unit.systemType,
+        btuCapacity: unit.btuCapacity,
+        voltage: unit.voltage,
+        phases: unit.phases,
+        sizeMatch: unit.sizeMatch,
+        seerRating: unit.seerRating,
+        eerRating: unit.eerRating,
+        hspfRating: unit.hspfRating,
+        refrigerant: unit.refrigerant,
+        driveType: unit.driveType,
+        soundLevel: unit.soundLevel,
+        dimensions: unit.dimensions,
+        weight: unit.weight,
+        specifications: [
+          { label: "SEER", value: unit.seerRating.toString() },
+          { label: "Refrigerant", value: unit.refrigerant },
+          { label: "Drive Type", value: unit.driveType },
+          { label: "Sound Level", value: unit.soundLevel.toString(), unit: " dB" }
+        ]
+      };
+
+      await exportSingleComparison(originalUnit, replacement, {
+        includeProjectInfo: true,
+        includeEnvironmentalBenefits: true,
+        includeCostAnalysis: true
+      });
+
+      toast({
+        title: "PDF Export Successful",
+        description: `Specification report for ${unit.modelNumber} has been downloaded.`,
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: "There was an error generating the PDF report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Handle search parameter updates (if callback provided)

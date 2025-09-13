@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import SpecificationCard from "./SpecificationCard";
-import { ArrowDown, ArrowUp, Equal, ExternalLink } from "lucide-react";
+import { ArrowDown, ArrowUp, Equal, ExternalLink, Download, CheckSquare, Square } from "lucide-react";
 
 interface DaikinReplacement {
   id: string;
@@ -22,9 +23,20 @@ interface DaikinReplacement {
 interface ReplacementGridProps {
   replacements: DaikinReplacement[];
   onViewDetails: (replacement: DaikinReplacement) => void;
+  selectedUnits?: Set<string>;
+  onToggleSelection?: (replacementId: string) => void;
+  onExportSingle?: (replacement: DaikinReplacement) => void;
+  isExporting?: boolean;
 }
 
-export default function ReplacementGrid({ replacements, onViewDetails }: ReplacementGridProps) {
+export default function ReplacementGrid({ 
+  replacements, 
+  onViewDetails,
+  selectedUnits = new Set(),
+  onToggleSelection,
+  onExportSingle,
+  isExporting = false
+}: ReplacementGridProps) {
   const sizeMatchConfig = {
     smaller: {
       icon: ArrowDown,
@@ -78,49 +90,92 @@ export default function ReplacementGrid({ replacements, onViewDetails }: Replace
 
               {matches.length > 0 ? (
                 <div className="space-y-4">
-                  {matches.map((replacement) => (
-                    <Card 
-                      key={replacement.id} 
-                      className="hover-elevate cursor-pointer border-primary/20"
-                      onClick={() => onViewDetails(replacement)}
-                      data-testid={`card-replacement-${replacement.sizeMatch}-${replacement.id}`}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="text-primary text-base">
-                              Daikin {replacement.modelNumber}
-                            </CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                              {replacement.btuCapacity.toLocaleString()} BTU/hr • {replacement.voltage}V
-                            </p>
+                  {matches.map((replacement) => {
+                    const isSelected = selectedUnits.has(replacement.id);
+                    
+                    return (
+                      <Card 
+                        key={replacement.id} 
+                        className={`hover-elevate cursor-pointer border-primary/20 transition-colors ${
+                          isSelected ? 'ring-2 ring-primary bg-primary/5' : ''
+                        }`}
+                        onClick={() => onViewDetails(replacement)}
+                        data-testid={`card-replacement-${replacement.sizeMatch}-${replacement.id}`}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1">
+                              {onToggleSelection && (
+                                <div 
+                                  className="pt-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => onToggleSelection(replacement.id)}
+                                    data-testid={`checkbox-select-${replacement.id}`}
+                                  />
+                                </div>
+                              )}
+                              
+                              <div className="flex-1">
+                                <CardTitle className="text-primary text-base">
+                                  Daikin {replacement.modelNumber}
+                                </CardTitle>
+                                <p className="text-sm text-muted-foreground">
+                                  {replacement.btuCapacity.toLocaleString()} BTU/hr • {replacement.voltage}V
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <Badge className="bg-primary/10 text-primary">
+                              {replacement.systemType}
+                            </Badge>
                           </div>
-                          <Badge className="bg-primary/10 text-primary">
-                            {replacement.systemType}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            {Math.round(replacement.btuCapacity / 12000 * 10) / 10} Tons • {replacement.phases} Phase
-                          </span>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewDetails(replacement);
-                            }}
-                            data-testid={`button-view-details-${replacement.id}`}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Details
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardHeader>
+                        
+                        <CardContent>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">
+                              {Math.round(replacement.btuCapacity / 12000 * 10) / 10} Tons • {replacement.phases} Phase
+                            </span>
+                            
+                            <div className="flex items-center gap-2">
+                              {onExportSingle && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  disabled={isExporting}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onExportSingle(replacement);
+                                  }}
+                                  data-testid={`button-export-${replacement.id}`}
+                                  className="gap-1"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Export
+                                </Button>
+                              )}
+                              
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewDetails(replacement);
+                                }}
+                                data-testid={`button-view-details-${replacement.id}`}
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                Details
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <Card className="border-dashed">
