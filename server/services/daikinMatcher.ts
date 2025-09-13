@@ -702,7 +702,6 @@ export class DaikinMatcher {
         if (unit.phases !== searchInput.phases) return false;
         
         // Optional filters
-        if (searchInput.minSEER && unit.seerRating < searchInput.minSEER) return false;
         if (searchInput.maxSoundLevel && unit.soundLevel > searchInput.maxSoundLevel) return false;
         if (searchInput.refrigerant && unit.refrigerant !== searchInput.refrigerant) return false;
         if (searchInput.driveType && unit.driveType !== searchInput.driveType) return false;
@@ -759,8 +758,7 @@ export class DaikinMatcher {
    * Find Daikin replacements for a parsed original unit
    */
   public findReplacements(originalUnit: ParsedModel, efficiencyPreference?: {
-    minSEER?: number;
-    preferredLevel?: "standard" | "high" | "premium";
+    preferredLevel?: "standard" | "high";
     energySavings?: boolean;
   }): Replacement[] {
     try {
@@ -1155,8 +1153,7 @@ export class DaikinMatcher {
    * Filter replacements by efficiency preferences
    */
   private filterByEfficiency(replacements: Replacement[], efficiencyPreference: {
-    minSEER?: number;
-    preferredLevel?: "standard" | "high" | "premium";
+    preferredLevel?: "standard" | "high";
     energySavings?: boolean;
   }): Replacement[] {
     return replacements.filter(replacement => {
@@ -1166,17 +1163,11 @@ export class DaikinMatcher {
       );
       const seerRating = seerSpec ? parseFloat(seerSpec.value) : 0;
 
-      // Filter by minimum SEER requirement
-      if (efficiencyPreference.minSEER && seerRating < efficiencyPreference.minSEER) {
-        return false;
-      }
-
       // Filter by preferred efficiency level
       if (efficiencyPreference.preferredLevel) {
         const levelRanges = {
           "standard": { min: 13, max: 15 },
-          "high": { min: 16, max: 18 },
-          "premium": { min: 19, max: 30 }
+          "high": { min: 16, max: 18 }
         };
         
         const range = levelRanges[efficiencyPreference.preferredLevel];
@@ -1201,8 +1192,7 @@ export class DaikinMatcher {
     replacements: Replacement[], 
     originalCapacity: number,
     efficiencyPreference?: {
-      minSEER?: number;
-      preferredLevel?: "standard" | "high" | "premium";
+      preferredLevel?: "standard" | "high";
       energySavings?: boolean;
     }
   ): Replacement[] {

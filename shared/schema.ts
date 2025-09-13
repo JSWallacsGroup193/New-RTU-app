@@ -63,7 +63,6 @@ export const specSearchInputSchema = z.object({
   efficiency: efficiencyEnum.default("standard"),
   
   // Optional performance requirements
-  minSEER: z.number().optional(),
   maxSoundLevel: z.number().optional(),
   
   // Optional filters
@@ -345,7 +344,7 @@ export const projectSchema = z.object({
   status: z.enum(["draft", "in_progress", "completed"]).default("draft")
 });
 
-export type Project = z.infer<typeof projectSchema>;
+export type ProjectData = z.infer<typeof projectSchema>;
 
 // ============================================================================
 // ENHANCED REPLACEMENT SCHEMA

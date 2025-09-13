@@ -9,8 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Search, Zap, Info, Star } from "lucide-react";
 
 interface EfficiencyPreference {
-  minSEER?: number;
-  preferredLevel?: "standard" | "high" | "premium";
+  preferredLevel?: "standard" | "high";
   energySavings?: boolean;
 }
 
@@ -22,7 +21,6 @@ interface ModelInputFormProps {
 export default function ModelInputForm({ onSearch, isLoading = false }: ModelInputFormProps) {
   const [modelNumber, setModelNumber] = useState("");
   const [efficiencyLevel, setEfficiencyLevel] = useState<string>("");
-  const [minSEER, setMinSEER] = useState<string>("");
   const [energySavings, setEnergySavings] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -31,11 +29,7 @@ export default function ModelInputForm({ onSearch, isLoading = false }: ModelInp
       const efficiencyPreference: EfficiencyPreference = {};
       
       if (efficiencyLevel) {
-        efficiencyPreference.preferredLevel = efficiencyLevel as "standard" | "high" | "premium";
-      }
-      
-      if (minSEER) {
-        efficiencyPreference.minSEER = parseFloat(minSEER);
+        efficiencyPreference.preferredLevel = efficiencyLevel as "standard" | "high";
       }
       
       efficiencyPreference.energySavings = energySavings;
@@ -101,7 +95,7 @@ export default function ModelInputForm({ onSearch, isLoading = false }: ModelInp
                 </Tooltip>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 {/* Efficiency Level Selection */}
                 <div className="space-y-2">
                   <Label htmlFor="efficiency-level">Efficiency Level</Label>
@@ -112,27 +106,6 @@ export default function ModelInputForm({ onSearch, isLoading = false }: ModelInp
                     <SelectContent>
                       <SelectItem value="standard">Standard Efficiency (13-15 SEER)</SelectItem>
                       <SelectItem value="high">High Efficiency (16-18 SEER)</SelectItem>
-                      <SelectItem value="premium">Premium Efficiency (19+ SEER)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Minimum SEER Rating */}
-                <div className="space-y-2">
-                  <Label htmlFor="min-seer">Minimum SEER Rating</Label>
-                  <Select value={minSEER} onValueChange={setMinSEER}>
-                    <SelectTrigger data-testid="select-min-seer">
-                      <SelectValue placeholder="Any SEER rating" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="13">13 SEER</SelectItem>
-                      <SelectItem value="14">14 SEER</SelectItem>
-                      <SelectItem value="15">15 SEER</SelectItem>
-                      <SelectItem value="16">16 SEER</SelectItem>
-                      <SelectItem value="17">17 SEER</SelectItem>
-                      <SelectItem value="18">18 SEER</SelectItem>
-                      <SelectItem value="19">19 SEER</SelectItem>
-                      <SelectItem value="20">20+ SEER</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

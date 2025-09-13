@@ -173,7 +173,6 @@ export default function EnhancedSpecificationSearchResults({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
   // Advanced filter states
-  const [minSEER, setMinSEER] = useState<number | undefined>();
   const [maxSEER, setMaxSEER] = useState<number | undefined>();
   const [maxSoundLevel, setMaxSoundLevel] = useState<number | undefined>();
   const [highEfficiencyOnly, setHighEfficiencyOnly] = useState(false);
@@ -300,9 +299,6 @@ export default function EnhancedSpecificationSearchResults({
     }
 
     // Advanced filters
-    if (minSEER) {
-      filtered = filtered.filter(unit => unit.seerRating >= minSEER);
-    }
     if (maxSEER) {
       filtered = filtered.filter(unit => unit.seerRating <= maxSEER);
     }
@@ -338,7 +334,7 @@ export default function EnhancedSpecificationSearchResults({
           return 0;
       }
     });
-  }, [enhancedUnits, selectedSystemType, minSEER, maxSEER, maxSoundLevel, highEfficiencyOnly, quietOperationOnly, sortBy]);
+  }, [enhancedUnits, selectedSystemType, maxSEER, maxSoundLevel, highEfficiencyOnly, quietOperationOnly, sortBy]);
 
   // Selection handlers
   const handleSelectUnit = (unitId: string, selected: boolean) => {
@@ -361,7 +357,6 @@ export default function EnhancedSpecificationSearchResults({
 
   const clearFilters = () => {
     setSelectedSystemType("all");
-    setMinSEER(undefined);
     setMaxSEER(undefined);
     setMaxSoundLevel(undefined);
     setHighEfficiencyOnly(false);
@@ -508,20 +503,6 @@ export default function EnhancedSpecificationSearchResults({
           <CardContent className="pt-0 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* SEER Range */}
-              <div className="space-y-2">
-                <Label htmlFor="min-seer">Min SEER</Label>
-                <Input
-                  type="number"
-                  min="13"
-                  max="25"
-                  step="0.5"
-                  value={minSEER || ""}
-                  onChange={(e) => setMinSEER(e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder="13.0"
-                  data-testid="input-min-seer"
-                />
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="max-seer">Max SEER</Label>
                 <Input

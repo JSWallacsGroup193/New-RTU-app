@@ -331,21 +331,6 @@ export default function InlineEditControls({
               </Select>
             </div>
 
-            {/* Minimum SEER (Optional) */}
-            <div className="space-y-2">
-              <Label htmlFor="minSEER">Min SEER (Optional)</Label>
-              <Input
-                type="number"
-                min="13"
-                max="25"
-                step="0.1"
-                value={editParams.minSEER || ""}
-                onChange={(e) => updateParam('minSEER', e.target.value ? parseFloat(e.target.value) : undefined)}
-                placeholder="e.g. 14.5"
-                data-testid="input-min-seer"
-              />
-            </div>
-
             {/* Max Sound Level (Optional) */}
             <div className="space-y-2">
               <Label htmlFor="maxSoundLevel">Max Sound Level (dB)</Label>

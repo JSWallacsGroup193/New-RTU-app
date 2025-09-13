@@ -49,8 +49,7 @@ export default function HVACDecoder() {
   });
 
   const handleSearch = async (modelNumber: string, efficiencyPreference?: {
-    minSEER?: number;
-    preferredLevel?: "standard" | "high" | "premium";
+    preferredLevel?: "standard" | "high";
     energySavings?: boolean;
   }) => {
     console.log("Searching for model:", modelNumber, "with efficiency preference:", efficiencyPreference);

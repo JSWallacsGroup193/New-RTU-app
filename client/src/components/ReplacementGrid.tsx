@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import SpecificationCard from "./SpecificationCard";
-import { ArrowDown, ArrowUp, Equal, ExternalLink, Download, CheckSquare, Square, Star, Zap, Leaf } from "lucide-react";
+import { ArrowDown, ArrowUp, Equal, ExternalLink, Download, CheckSquare, Square, Zap, Leaf } from "lucide-react";
 
 interface DaikinReplacement {
   id: string;
@@ -67,9 +67,7 @@ export default function ReplacementGrid({
   const getEfficiencyBadge = (seerRating: number | null) => {
     if (!seerRating) return null;
     
-    if (seerRating >= 19) {
-      return { level: "Premium", color: "bg-green-500 text-white", icon: Star };
-    } else if (seerRating >= 16) {
+    if (seerRating >= 16) {
       return { level: "High", color: "bg-blue-500 text-white", icon: Zap };
     } else if (seerRating >= 13) {
       return { level: "Standard", color: "bg-gray-500 text-white", icon: Leaf };

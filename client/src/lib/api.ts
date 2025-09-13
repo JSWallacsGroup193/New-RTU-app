@@ -4,8 +4,7 @@ import { DecodeResponse, SpecSearchResponse, SpecSearchInput } from "@shared/sch
 export const decodeModelNumber = async (params: {
   modelNumber: string;
   efficiencyPreference?: {
-    minSEER?: number;
-    preferredLevel?: "standard" | "high" | "premium";
+    preferredLevel?: "standard" | "high";
     energySavings?: boolean;
   };
 }): Promise<DecodeResponse> => {

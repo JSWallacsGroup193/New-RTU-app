@@ -45,8 +45,7 @@ const matcher = new DaikinMatcher();
 const decodeRequestSchema = z.object({
   modelNumber: z.string().min(3).max(50).trim(),
   efficiencyPreference: z.object({
-    minSEER: z.number().optional(),
-    preferredLevel: z.enum(["standard", "high", "premium"]).optional(),
+    preferredLevel: z.enum(["standard", "high"]).optional(),
     energySavings: z.boolean().optional()
   }).optional()
 });
