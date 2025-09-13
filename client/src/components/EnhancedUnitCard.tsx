@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import EditableSpecificationForm from "./EditableSpecificationForm";
+import AccessoryManagement from "./AccessoryManagement";
 import { 
   Thermometer, 
   Zap, 
@@ -105,6 +106,12 @@ interface EnhancedUnitCardProps {
   family?: DaikinFamilyKeys;
   onSpecificationUpdate?: (newModelNumber: string, specifications: any) => void;
   onSave?: (formData: any) => void;
+  // Accessory management
+  showAccessories?: boolean;
+  selectedFactoryOptions?: string[];
+  selectedFieldAccessories?: string[];
+  onFactoryOptionsChange?: (selectedOptions: string[]) => void;
+  onFieldAccessoriesChange?: (selectedAccessories: string[]) => void;
 }
 
 export default function EnhancedUnitCard({
@@ -117,7 +124,12 @@ export default function EnhancedUnitCard({
   isEditable = false,
   family,
   onSpecificationUpdate,
-  onSave
+  onSave,
+  showAccessories = false,
+  selectedFactoryOptions = [],
+  selectedFieldAccessories = [],
+  onFactoryOptionsChange,
+  onFieldAccessoriesChange
 }: EnhancedUnitCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState("specs");
@@ -348,10 +360,9 @@ export default function EnhancedUnitCard({
             <Separator />
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="specs">Technical</TabsTrigger>
-                <TabsTrigger value="factory">Factory Options</TabsTrigger>
-                <TabsTrigger value="accessories">Field Accessories</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="specs">Technical Specs</TabsTrigger>
+                <TabsTrigger value="accessories">Accessories</TabsTrigger>
               </TabsList>
               
               <TabsContent value="specs" className="space-y-4">
@@ -474,67 +485,26 @@ export default function EnhancedUnitCard({
                 </div>
               </TabsContent>
               
-              <TabsContent value="factory" className="space-y-4">
-                {Object.entries(factoryOptionsByCategory).map(([category, options]) => (
-                  <div key={category}>
-                    <h4 className="text-sm font-medium mb-2">{category}</h4>
-                    <div className="space-y-2">
-                      {options.map((option, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                          <div>
-                            <p className="text-sm font-medium">{option.code}</p>
-                            <p className="text-xs text-muted-foreground">{option.description}</p>
-                          </div>
-                          <Badge 
-                            variant={option.availability === "Standard" ? "default" : "outline"}
-                            className={
-                              option.availability === "Standard" ? "bg-green-100 text-green-800" :
-                              option.availability === "Optional" ? "bg-blue-100 text-blue-800" :
-                              "bg-gray-100 text-gray-800"
-                            }
-                          >
-                            {option.availability}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </TabsContent>
-              
               <TabsContent value="accessories" className="space-y-4">
-                {Object.entries(fieldAccessoriesByCategory).map(([category, accessories]) => (
-                  <div key={category}>
-                    <h4 className="text-sm font-medium mb-2">{category}</h4>
-                    <div className="space-y-2">
-                      {accessories.map((accessory, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{accessory.code}</p>
-                            <p className="text-xs text-muted-foreground">{accessory.description}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              variant="outline"
-                              className={
-                                accessory.complexity === "Easy" ? "bg-green-100 text-green-800" :
-                                accessory.complexity === "Moderate" ? "bg-yellow-100 text-yellow-800" :
-                                "bg-red-100 text-red-800"
-                              }
-                            >
-                              {accessory.complexity}
-                            </Badge>
-                            <Badge 
-                              variant={accessory.compatible ? "default" : "destructive"}
-                            >
-                              {accessory.compatible ? "Compatible" : "Check"}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                {showAccessories && family ? (
+                  <AccessoryManagement
+                    family={family}
+                    modelNumber={unit.modelNumber}
+                    systemType={unit.systemType}
+                    tonnage={unit.tonnage}
+                    selectedFactoryOptions={selectedFactoryOptions}
+                    selectedFieldAccessories={selectedFieldAccessories}
+                    onFactoryOptionsChange={onFactoryOptionsChange}
+                    onFieldAccessoriesChange={onFieldAccessoriesChange}
+                    showPricing={true}
+                    mode="selection"
+                  />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Wrench className="h-8 w-8 mx-auto mb-2" />
+                    <p>Accessory management not available for this unit</p>
                   </div>
-                ))}
+                )}
               </TabsContent>
             </Tabs>
           </CollapsibleContent>

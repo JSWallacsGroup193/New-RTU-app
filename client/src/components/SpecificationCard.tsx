@@ -2,9 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Thermometer, Zap, Gauge, Fan, Edit2, Settings } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Thermometer, Zap, Gauge, Fan, Edit2, Settings, Wrench, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import EditableSpecificationForm from "./EditableSpecificationForm";
+import AccessoryManagement from "./AccessoryManagement";
 import { DaikinFamilyKeys } from "@shared/schema";
 
 interface Specification {
@@ -27,6 +29,12 @@ interface SpecificationCardProps {
   family?: DaikinFamilyKeys;
   onSpecificationUpdate?: (newModelNumber: string, specifications: any) => void;
   onSave?: (formData: any) => void;
+  // Accessory management
+  showAccessories?: boolean;
+  selectedFactoryOptions?: string[];
+  selectedFieldAccessories?: string[];
+  onFactoryOptionsChange?: (selectedOptions: string[]) => void;
+  onFieldAccessoriesChange?: (selectedAccessories: string[]) => void;
 }
 
 export default function SpecificationCard({
@@ -41,9 +49,15 @@ export default function SpecificationCard({
   isEditable = false,
   family,
   onSpecificationUpdate,
-  onSave
+  onSave,
+  showAccessories = false,
+  selectedFactoryOptions = [],
+  selectedFieldAccessories = [],
+  onFactoryOptionsChange,
+  onFieldAccessoriesChange
 }: SpecificationCardProps) {
   const [isEditMode, setIsEditMode] = useState(false);
+  const [showAccessoriesSection, setShowAccessoriesSection] = useState(false);
   const systemTypeColors = {
     "Heat Pump": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     "Gas/Electric": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200", 
@@ -160,6 +174,48 @@ export default function SpecificationCard({
             </div>
           ))}
         </div>
+
+        {/* Accessory Management Section */}
+        {showAccessories && family && (
+          <>
+            <Separator />
+            <Collapsible open={showAccessoriesSection} onOpenChange={setShowAccessoriesSection}>
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-between p-2 h-auto hover-elevate"
+                  data-testid="button-toggle-accessories"
+                >
+                  <div className="flex items-center gap-2">
+                    <Wrench className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Accessory Options</span>
+                    {(selectedFactoryOptions.length > 0 || selectedFieldAccessories.length > 0) && (
+                      <Badge variant="default" className="text-xs">
+                        {selectedFactoryOptions.length + selectedFieldAccessories.length} selected
+                      </Badge>
+                    )}
+                  </div>
+                  {showAccessoriesSection ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent className="pt-4">
+                <AccessoryManagement
+                  family={family}
+                  modelNumber={modelNumber}
+                  systemType={systemType}
+                  tonnage={Math.round(btuCapacity / 12000 * 10) / 10}
+                  selectedFactoryOptions={selectedFactoryOptions}
+                  selectedFieldAccessories={selectedFieldAccessories}
+                  onFactoryOptionsChange={onFactoryOptionsChange}
+                  onFieldAccessoriesChange={onFieldAccessoriesChange}
+                  showPricing={true}
+                  mode="selection"
+                />
+              </CollapsibleContent>
+            </Collapsible>
+          </>
+        )}
       </CardContent>
     </Card>
   );

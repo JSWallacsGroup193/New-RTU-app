@@ -906,8 +906,12 @@ export const familyOptionsResponseSchema = z.object({
       display_name: z.string()
     })).optional(),
     
-    // Factory-installed options
-    factory_accessories: z.array(factoryInstalledOptionSchema),
+    // Factory-installed options organized by category
+    factory_accessories: z.object({
+      electrical: z.array(factoryInstalledOptionSchema),
+      controls: z.array(factoryInstalledOptionSchema),
+      refrigerant: z.array(factoryInstalledOptionSchema)
+    }),
     
     // Field accessories
     field_accessories: z.array(fieldAccessorySchema),

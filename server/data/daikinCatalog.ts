@@ -49,11 +49,17 @@ export const ELECTRICAL_ADD_ONS: FactoryInstalledOption[] = [
   { category: "Electrical", code: "HKR", description: "Electric Heat Kit - 10kW", priceAdder: 450 },
   { category: "Electrical", code: "HKR15", description: "Electric Heat Kit - 15kW", priceAdder: 580 },
   { category: "Electrical", code: "HKR20", description: "Electric Heat Kit - 20kW", priceAdder: 720 },
+  { category: "Electrical", code: "HKR30", description: "Electric Heat Kit - 30kW", priceAdder: 950 },
+  { category: "Electrical", code: "HKR45", description: "Electric Heat Kit - 45kW", priceAdder: 1200 },
   { category: "Electrical", code: "DIS", description: "Disconnect Switch", priceAdder: 125 },
   { category: "Electrical", code: "CUR", description: "Current Monitoring Relay", priceAdder: 95 },
   { category: "Electrical", code: "LPS", description: "Low Pressure Switch", priceAdder: 85 },
   { category: "Electrical", code: "HPS", description: "High Pressure Switch", priceAdder: 85 },
-  { category: "Electrical", code: "CTL", description: "Control Circuit Transformer", priceAdder: 110 }
+  { category: "Electrical", code: "CTL", description: "Control Circuit Transformer", priceAdder: 110 },
+  { category: "Electrical", code: "FUS", description: "Time Delay Fuses", priceAdder: 65 },
+  { category: "Electrical", code: "SCP", description: "Short Cycle Protection", priceAdder: 145 },
+  { category: "Electrical", code: "VFD", description: "Variable Frequency Drive Ready", priceAdder: 325 },
+  { category: "Electrical", code: "PHS", description: "Phase Monitor", priceAdder: 155 }
 ];
 
 export const CONTROL_ADD_ONS: FactoryInstalledOption[] = [
@@ -61,7 +67,14 @@ export const CONTROL_ADD_ONS: FactoryInstalledOption[] = [
   { category: "Controls", code: "APP", description: "APP Connection Module", priceAdder: 225 },
   { category: "Controls", code: "DCV", description: "Demand Control Ventilation", priceAdder: 350 },
   { category: "Controls", code: "ECO", description: "Economizer Integration", priceAdder: 425 },
-  { category: "Controls", code: "BAS", description: "Building Automation System Interface", priceAdder: 375 }
+  { category: "Controls", code: "BAS", description: "Building Automation System Interface", priceAdder: 375 },
+  { category: "Controls", code: "MOD", description: "Modbus Communication Interface", priceAdder: 285 },
+  { category: "Controls", code: "LON", description: "LonWorks Communication", priceAdder: 315 },
+  { category: "Controls", code: "BAC", description: "BACnet/IP Interface", priceAdder: 395 },
+  { category: "Controls", code: "TMS", description: "Temperature Management System", priceAdder: 245 },
+  { category: "Controls", code: "SCH", description: "7-Day Scheduling Control", priceAdder: 185 },
+  { category: "Controls", code: "ALM", description: "Alarm Relay Package", priceAdder: 165 },
+  { category: "Controls", code: "LCD", description: "LCD Display Panel", priceAdder: 195 }
 ];
 
 export const REFRIGERANT_ADD_ONS: FactoryInstalledOption[] = [
@@ -71,16 +84,54 @@ export const REFRIGERANT_ADD_ONS: FactoryInstalledOption[] = [
 ];
 
 export const FIELD_ACCESSORIES: FieldAccessory[] = [
+  // Filters
   { category: "Filters", code: "FLT16", description: "Standard Efficiency Filter (16x25x1)", compatible: ["DSC", "DHC"] },
   { category: "Filters", code: "FLT20", description: "High Efficiency Filter (20x25x2)", compatible: ["DSC", "DHC"] },
   { category: "Filters", code: "FLTMERV8", description: "MERV 8 Pleated Filter", compatible: ["all"] },
   { category: "Filters", code: "FLTMERV11", description: "MERV 11 Pleated Filter", compatible: ["all"] },
+  { category: "Filters", code: "FLTMERV13", description: "MERV 13 High-Efficiency Filter", compatible: ["all"] },
+  { category: "Filters", code: "FLTMERV16", description: "MERV 16 HEPA-Type Filter", compatible: ["DHC", "DHG", "DHH"] },
+  { category: "Filters", code: "FLTCARBON", description: "Activated Carbon Filter", compatible: ["all"] },
+  { category: "Filters", code: "FLTUVCC", description: "UV-C Light Air Purifier", compatible: ["all"] },
+  
+  // Controls
   { category: "Controls", code: "TSTPROG", description: "Programmable Thermostat", compatible: ["all"] },
   { category: "Controls", code: "TSTSMART", description: "Smart WiFi Thermostat", compatible: ["all"] },
+  { category: "Controls", code: "TSTZONE", description: "Zoning Control System", compatible: ["all"] },
+  { category: "Controls", code: "HUMCON", description: "Whole-Home Humidifier Control", compatible: ["all"] },
+  { category: "Controls", code: "DEFCON", description: "Defrost Control Override", compatible: ["DHH", "DSH"] },
+  { category: "Controls", code: "TSTSTG", description: "Two-Stage Thermostat", compatible: ["DSC", "DSG", "DHC", "DHG"] },
+  
+  // Sensors
   { category: "Sensors", code: "SNSOUT", description: "Outdoor Temperature Sensor", compatible: ["all"] },
   { category: "Sensors", code: "SNSRET", description: "Return Air Temperature Sensor", compatible: ["all"] },
+  { category: "Sensors", code: "SNSHUM", description: "Humidity Sensor", compatible: ["all"] },
+  { category: "Sensors", code: "SNSPRESS", description: "Static Pressure Sensor", compatible: ["all"] },
+  { category: "Sensors", code: "SNSCO2", description: "CO2 Sensor for DCV", compatible: ["all"] },
+  { category: "Sensors", code: "SNSIAQ", description: "Indoor Air Quality Sensor", compatible: ["all"] },
+  
+  // Dampers
   { category: "Dampers", code: "DMPMOT", description: "Motorized Damper Control", compatible: ["all"] },
-  { category: "Dampers", code: "DMPRET", description: "Return Air Damper", compatible: ["all"] }
+  { category: "Dampers", code: "DMPRET", description: "Return Air Damper", compatible: ["all"] },
+  { category: "Dampers", code: "DMPVEN", description: "Ventilation Air Damper", compatible: ["all"] },
+  { category: "Dampers", code: "DMPREL", description: "Relief Air Damper", compatible: ["all"] },
+  { category: "Dampers", code: "DMPZONE", description: "Zone Control Dampers", compatible: ["all"] },
+  
+  // Ductwork & Accessories
+  { category: "Ductwork", code: "DUCTFLEX", description: "Flexible Duct Connector", compatible: ["all"] },
+  { category: "Ductwork", code: "DUCTTRANS", description: "Duct Transition", compatible: ["all"] },
+  { category: "Ductwork", code: "DUCTINSUL", description: "Duct Insulation Kit", compatible: ["all"] },
+  { category: "Ductwork", code: "DUCTBOOT", description: "Duct Boot Set", compatible: ["all"] },
+  
+  // Electrical
+  { category: "Electrical", code: "DISLOCAL", description: "Local Disconnect Switch", compatible: ["all"] },
+  { category: "Electrical", code: "WIRING", description: "Field Wiring Kit", compatible: ["all"] },
+  { category: "Electrical", code: "CONDUIT", description: "Electrical Conduit Kit", compatible: ["all"] },
+  
+  // Coils & Heat Exchangers
+  { category: "Coils", code: "COILHOT", description: "Hot Water Coil", compatible: ["DSC", "DHC"] },
+  { category: "Coils", code: "COILSTM", description: "Steam Heating Coil", compatible: ["DSC", "DHC"] },
+  { category: "Coils", code: "COILPRHT", description: "Preheat Coil", compatible: ["all"] }
 ];
 
 // ============================================================================

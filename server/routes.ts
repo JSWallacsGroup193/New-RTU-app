@@ -805,6 +805,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           accessory.compatible.includes(family)
         );
         
+        // Organize factory accessories by category for proper structure
+        const factoryAccessoriesByCategory = {
+          electrical: ELECTRICAL_ADD_ONS,
+          controls: CONTROL_ADD_ONS,
+          refrigerant: REFRIGERANT_ADD_ONS
+        };
+
         const response = {
           success: true,
           family,
@@ -813,7 +820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             voltage_phase_combinations: voltagePhases,
             gas_btu_options: gasBtuOptions.length > 0 ? gasBtuOptions : undefined,
             electric_kw_options: electricKwOptions.length > 0 ? electricKwOptions : undefined,
-            factory_accessories: [...ELECTRICAL_ADD_ONS, ...CONTROL_ADD_ONS, ...REFRIGERANT_ADD_ONS],
+            factory_accessories: factoryAccessoriesByCategory,
             field_accessories: compatibleFieldAccessories,
             efficiency_levels: ["standard", "high"],
             system_types: [familyConfig.type.includes("Heat Pump") ? "Heat Pump" : 
@@ -852,6 +859,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           display_name: `${tonnage} Ton`
         }));
         
+        // Organize factory accessories by category for consistency
+        const factoryAccessoriesByCategory = {
+          electrical: ELECTRICAL_ADD_ONS,
+          controls: CONTROL_ADD_ONS,
+          refrigerant: REFRIGERANT_ADD_ONS
+        };
+
         const response = {
           success: true,
           manufacturer: "Daikin",
@@ -863,7 +877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               { voltage_code: "4", phase_code: "3", voltage: "460" as const, phases: "3" as const, description: "460V 3-Phase" },
               { voltage_code: "7", phase_code: "3", voltage: "575" as const, phases: "3" as const, description: "575V 3-Phase" }
             ],
-            factory_accessories: [...ELECTRICAL_ADD_ONS, ...CONTROL_ADD_ONS, ...REFRIGERANT_ADD_ONS],
+            factory_accessories: factoryAccessoriesByCategory,
             field_accessories: FIELD_ACCESSORIES,
             efficiency_levels: ["standard", "high"],
             system_types: ["Heat Pump", "Gas/Electric", "Straight A/C"],
