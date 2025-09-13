@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SpecSearchResponse } from "@shared/schema";
+import { SpecSearchResponse, type SpecSearchInput } from "@shared/schema";
 import { ArrowLeft, Search, Filter } from "lucide-react";
 import ReplacementGrid from "./ReplacementGrid";
 import SystemTypeFilter from "./SystemTypeFilter";
@@ -8,12 +8,7 @@ import { useState } from "react";
 
 interface SpecificationSearchResultsProps {
   searchResults: SpecSearchResponse;
-  searchParams: {
-    btuMin: number;
-    btuMax: number;
-    systemType?: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-    voltage?: string;
-  };
+  searchParams: SpecSearchInput;
   onNewSearch: () => void;
   onBackToSpecForm: () => void;
 }
@@ -92,23 +87,35 @@ export default function SpecificationSearchResults({
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">BTU Range:</span>
-              <div className="font-medium">
-                {searchParams.btuMin.toLocaleString()} - {searchParams.btuMax.toLocaleString()}
-              </div>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">System Type:</span>
               <div className="font-medium">
-                {searchParams.systemType || "All Types"}
+                {searchParams.systemType}
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Tonnage:</span>
+              <div className="font-medium">
+                {searchParams.tonnage} Ton
               </div>
             </div>
             <div>
               <span className="text-muted-foreground">Voltage:</span>
               <div className="font-medium">
-                {searchParams.voltage || "All Voltages"}
+                {searchParams.voltage}V
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Phases:</span>
+              <div className="font-medium">
+                {searchParams.phases} Phase
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Efficiency:</span>
+              <div className="font-medium capitalize">
+                {searchParams.efficiency}
               </div>
             </div>
             <div>
@@ -118,6 +125,38 @@ export default function SpecificationSearchResults({
               </div>
             </div>
           </div>
+
+          {/* Conditional Parameters Display */}
+          {(searchParams.heatingBTU || searchParams.heatKitKW || searchParams.gasCategory) && (
+            <div className="mt-4 pt-4 border-t">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                {searchParams.heatingBTU && (
+                  <div>
+                    <span className="text-muted-foreground">Heating BTU:</span>
+                    <div className="font-medium">
+                      {searchParams.heatingBTU.toLocaleString()} BTU/hr
+                    </div>
+                  </div>
+                )}
+                {searchParams.gasCategory && (
+                  <div>
+                    <span className="text-muted-foreground">Gas Category:</span>
+                    <div className="font-medium">
+                      {searchParams.gasCategory}
+                    </div>
+                  </div>
+                )}
+                {searchParams.heatKitKW && (
+                  <div>
+                    <span className="text-muted-foreground">Heat Kit Size:</span>
+                    <div className="font-medium">
+                      {searchParams.heatKitKW} kW
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

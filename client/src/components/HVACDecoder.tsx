@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Database, Search, Zap } from "lucide-react";
 import { decodeModelNumber, searchBySpecs } from "@/lib/api";
-import { DecodeResponse, SpecSearchResponse } from "@shared/schema";
+import { DecodeResponse, SpecSearchResponse, type SpecSearchInput } from "@shared/schema";
 
 type AppState = "search" | "results" | "error" | "spec-search" | "spec-results";
 
@@ -17,7 +17,7 @@ export default function HVACDecoder() {
   const [appState, setAppState] = useState<AppState>("search");
   const [searchResults, setSearchResults] = useState<DecodeResponse | null>(null);
   const [specSearchResults, setSpecSearchResults] = useState<SpecSearchResponse | null>(null);
-  const [specSearchParams, setSpecSearchParams] = useState<any>(null);
+  const [specSearchParams, setSpecSearchParams] = useState<SpecSearchInput | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const decodeMutation = useMutation({
@@ -67,7 +67,7 @@ export default function HVACDecoder() {
     setAppState("spec-search");
   };
 
-  const handleSpecSearchSubmit = (params: any) => {
+  const handleSpecSearchSubmit = (params: SpecSearchInput) => {
     setSpecSearchParams(params);
     specSearchMutation.mutate(params);
   };

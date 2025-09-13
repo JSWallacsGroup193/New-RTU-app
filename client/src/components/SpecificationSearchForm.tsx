@@ -1,44 +1,37 @@
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Search } from "lucide-react";
-
-const specSearchSchema = z.object({
-  btuMin: z.number().min(6000).max(200000),
-  btuMax: z.number().min(6000).max(200000),
-  systemType: z.enum(["Heat Pump", "Gas/Electric", "Straight A/C"]).optional(),
-  voltage: z.string().optional()
-}).refine(data => data.btuMin < data.btuMax, {
-  message: "Minimum BTU must be less than maximum BTU",
-  path: ["btuMax"]
-});
-
-type SpecSearchFormData = z.infer<typeof specSearchSchema>;
+import { ArrowLeft, Search, Settings, Zap, Thermometer } from "lucide-react";
+import { specSearchInputSchema, type SpecSearchInput } from "@shared/schema";
 
 interface SpecificationSearchFormProps {
-  onSearch: (params: SpecSearchFormData) => void;
+  onSearch: (params: SpecSearchInput) => void;
   onBack: () => void;
   isLoading: boolean;
 }
 
 export default function SpecificationSearchForm({ onSearch, onBack, isLoading }: SpecificationSearchFormProps) {
-  const form = useForm<SpecSearchFormData>({
-    resolver: zodResolver(specSearchSchema),
+  const form = useForm<SpecSearchInput>({
+    resolver: zodResolver(specSearchInputSchema),
     defaultValues: {
-      btuMin: 24000,
-      btuMax: 60000,
-      systemType: undefined,
-      voltage: undefined,
+      systemType: "Heat Pump",
+      tonnage: "3.0",
+      voltage: "208-230",
+      phases: "1",
+      efficiency: "standard",
+      heatingBTU: undefined,
+      heatKitKW: undefined,
+      gasCategory: undefined,
     },
   });
 
-  const handleSubmit = (data: SpecSearchFormData) => {
+  const watchedSystemType = form.watch("systemType");
+
+  const handleSubmit = (data: SpecSearchInput) => {
     onSearch(data);
   };
 
@@ -58,120 +51,289 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
             <CardTitle className="text-xl">Search by Specifications</CardTitle>
           </div>
           <p className="text-muted-foreground">
-            Find Daikin units that match your specific requirements for BTU capacity, system type, and voltage.
+            Find Daikin units that match your specific requirements. Complete the required fields in order and any applicable conditional fields based on your system type.
           </p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-              {/* BTU Capacity Range */}
+              {/* Required Fields Section */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">BTU Capacity Range</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="btuMin"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Minimum BTU</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="24000"
-                            data-testid="input-btu-min"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormDescription>6,000 - 200,000</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="btuMax"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Maximum BTU</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="60000"
-                            data-testid="input-btu-max"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormDescription>6,000 - 200,000</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">System Configuration</h3>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Complete all required specifications in the order shown below.
+                </p>
+
+                {/* System Type */}
+                <FormField
+                  control={form.control}
+                  name="systemType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-medium">1. System Type</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        data-testid="select-system-type"
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select system type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Heat Pump">Heat Pump</SelectItem>
+                          <SelectItem value="Gas/Electric">Gas/Electric</SelectItem>
+                          <SelectItem value="Straight A/C">Straight A/C</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Choose the type of HVAC system you need to replace
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Tonnage */}
+                <FormField
+                  control={form.control}
+                  name="tonnage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-medium">2. Tonnage</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        data-testid="select-tonnage"
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select tonnage" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1.5">1.5 Ton</SelectItem>
+                          <SelectItem value="2.0">2.0 Ton</SelectItem>
+                          <SelectItem value="2.5">2.5 Ton</SelectItem>
+                          <SelectItem value="3.0">3.0 Ton</SelectItem>
+                          <SelectItem value="3.5">3.5 Ton</SelectItem>
+                          <SelectItem value="4.0">4.0 Ton</SelectItem>
+                          <SelectItem value="5.0">5.0 Ton</SelectItem>
+                          <SelectItem value="6.0">6.0 Ton</SelectItem>
+                          <SelectItem value="7.5">7.5 Ton</SelectItem>
+                          <SelectItem value="10.0">10.0 Ton</SelectItem>
+                          <SelectItem value="12.5">12.5 Ton</SelectItem>
+                          <SelectItem value="15.0">15.0 Ton</SelectItem>
+                          <SelectItem value="17.5">17.5 Ton</SelectItem>
+                          <SelectItem value="20.0">20.0 Ton</SelectItem>
+                          <SelectItem value="25.0">25.0 Ton</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Cooling capacity of the system (1 ton = 12,000 BTU/hr)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Voltage */}
+                <FormField
+                  control={form.control}
+                  name="voltage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-medium">3. Voltage</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        data-testid="select-voltage"
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select voltage" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="208-230">208-230V</SelectItem>
+                          <SelectItem value="460">460V</SelectItem>
+                          <SelectItem value="575">575V</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Electrical voltage requirement for the unit
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Phases */}
+                <FormField
+                  control={form.control}
+                  name="phases"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-medium">4. Phases</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        data-testid="select-phases"
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select phases" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1">Single Phase (1)</SelectItem>
+                          <SelectItem value="3">Three Phase (3)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Electrical phase configuration (1 or 3 phase)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
-              {/* System Type Filter */}
-              <FormField
-                control={form.control}
-                name="systemType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>System Type (Optional)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      data-testid="select-system-type"
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All system types" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Heat Pump">Heat Pump</SelectItem>
-                        <SelectItem value="Gas/Electric">Gas/Electric</SelectItem>
-                        <SelectItem value="Straight A/C">Straight A/C</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Filter by specific system type, or leave blank for all types
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Conditional Fields Section */}
+              {watchedSystemType && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Thermometer className="h-5 w-5 text-orange-500" />
+                    <h3 className="text-lg font-semibold">
+                      {watchedSystemType} Specific Requirements
+                    </h3>
+                  </div>
 
-              {/* Voltage Filter */}
-              <FormField
-                control={form.control}
-                name="voltage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Voltage (Optional)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      data-testid="select-voltage"
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All voltages" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="208-230">208-230V</SelectItem>
-                        <SelectItem value="460">460V</SelectItem>
-                        <SelectItem value="575">575V</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Filter by voltage requirement, or leave blank for all voltages
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                  {/* Gas/Electric Conditional Fields */}
+                  {watchedSystemType === "Gas/Electric" && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="heatingBTU"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-medium">Heating BTU's (Required)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                placeholder="80000"
+                                data-testid="input-heating-btu"
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Heating capacity in BTU/hr for gas furnace portion
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="gasCategory"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-medium">Gas Category (Required)</FormLabel>
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                              data-testid="select-gas-category"
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select gas type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Natural Gas">Natural Gas</SelectItem>
+                                <SelectItem value="Propane">Propane</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Type of gas fuel for the heating system
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+
+                  {/* Heat Pump Conditional Fields */}
+                  {watchedSystemType === "Heat Pump" && (
+                    <FormField
+                      control={form.control}
+                      name="heatKitKW"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-medium">Heat Kit Size (Optional)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="10"
+                              data-testid="input-heat-kit-kw"
+                              {...field}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Electric heat kit capacity in kilowatts (kW)
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Efficiency Selection */}
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-green-500" />
+                  <h3 className="text-lg font-semibold">Efficiency Level</h3>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="efficiency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-medium">Efficiency Selection</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        data-testid="select-efficiency"
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select efficiency level" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="standard">Standard Efficiency</SelectItem>
+                          <SelectItem value="high">High Efficiency</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Choose between standard or high efficiency models
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               {/* Submit Button */}
               <Button
@@ -182,7 +344,7 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
                 data-testid="button-search-specs"
               >
                 <Search className="h-4 w-4 mr-2" />
-                {isLoading ? "Searching..." : "Find Matching Units"}
+                {isLoading ? "Searching..." : "Find Matching Daikin Units"}
               </Button>
             </form>
           </Form>
