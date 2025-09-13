@@ -6,16 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   ArrowLeft, 
   Search, 
   Filter, 
+  ArrowUpDown,
   Grid3X3,
   List,
   Download,
   FileText,
   GitCompare,
   Trash2,
+  Settings2,
   SlidersHorizontal,
   ChevronDown
 } from "lucide-react";
@@ -25,12 +28,12 @@ import EnhancedUnitCard from "./EnhancedUnitCard";
 import InlineEditControls from "./InlineEditControls";
 import SystemTypeFilter from "./SystemTypeFilter";
 
-interface SpecificationSearchResultsProps {
+interface EnhancedSpecificationSearchResultsProps {
   searchResults: SpecSearchResponse;
   searchParams: SpecSearchInput;
   onNewSearch: () => void;
   onBackToSpecForm: () => void;
-  onUpdateSearch?: (newParams: SpecSearchInput) => void;
+  onUpdateSearch: (newParams: SpecSearchInput) => void;
 }
 
 // Enhanced unit interface with factory options and accessories
@@ -88,13 +91,13 @@ type SortOption =
 
 type ViewMode = "grid" | "list";
 
-export default function SpecificationSearchResults({
+export default function EnhancedSpecificationSearchResults({
   searchResults,
   searchParams,
   onNewSearch,
   onBackToSpecForm,
   onUpdateSearch
-}: SpecificationSearchResultsProps) {
+}: EnhancedSpecificationSearchResultsProps) {
   // State management
   const [selectedSystemType, setSelectedSystemType] = useState<"all" | "heat-pump" | "gas-electric" | "straight-ac">("all");
   const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
@@ -120,28 +123,24 @@ export default function SpecificationSearchResults({
       voltage: unit.voltage,
       phases: unit.phases,
       sizeMatch: "direct" as const, // All spec search results are direct matches
-      seerRating: 16.5 + Math.random() * 3, // Mock SEER rating with some variance
-      eerRating: 13.2 + Math.random() * 2,
-      hspfRating: unit.systemType === "Heat Pump" ? 9.5 + Math.random() * 1.5 : undefined,
+      seerRating: 16.5, // Mock SEER rating
+      eerRating: 13.2,
+      hspfRating: unit.systemType === "Heat Pump" ? 9.5 : undefined,
       refrigerant: "R-32",
-      driveType: Math.random() > 0.5 ? "Variable Speed" : "Fixed Speed",
-      coolingStages: Math.random() > 0.5 ? 2 : 1,
-      heatingStages: unit.systemType !== "Straight A/C" ? (Math.random() > 0.5 ? 2 : 1) : undefined,
-      soundLevel: 58 + Math.floor(Math.random() * 12), // 58-70 dB range
-      dimensions: { 
-        length: 84 + Math.floor(Math.random() * 20), 
-        width: 38 + Math.floor(Math.random() * 10), 
-        height: 84 + Math.floor(Math.random() * 20) 
-      },
-      weight: 350 + Math.floor(Math.random() * 150),
-      operatingAmperage: 24 + Math.random() * 15,
-      maxFuseSize: 45 + Math.floor(Math.random() * 20),
+      driveType: "Variable Speed",
+      coolingStages: 2,
+      heatingStages: unit.systemType !== "Straight A/C" ? 2 : undefined,
+      soundLevel: 65,
+      dimensions: { length: 84, width: 38, height: 84 },
+      weight: 350,
+      operatingAmperage: 28.5,
+      maxFuseSize: 45,
       temperatureRange: {
         cooling: { min: 65, max: 115 },
         heating: unit.systemType !== "Straight A/C" ? { min: -5, max: 65 } : undefined
       },
-      controlsType: Math.random() > 0.5 ? "Intelligent Touch" : "Digital Control",
-      coilType: Math.random() > 0.5 ? "Microchannel" : "Copper Tube",
+      controlsType: "Intelligent Touch",
+      coilType: "Microchannel",
       factoryOptions: [
         {
           category: "Controls & Sensors",
@@ -153,12 +152,6 @@ export default function SpecificationSearchResults({
           category: "Electrical",
           code: "DKEVR005",
           description: "5kW Electric Heat Kit",
-          availability: unit.systemType === "Heat Pump" ? "Optional" as const : "N/A" as const
-        },
-        {
-          category: "Performance",
-          code: "DECO001",
-          description: "Economizer Package",
           availability: "Optional" as const
         }
       ],
@@ -176,13 +169,6 @@ export default function SpecificationSearchResults({
           description: "Remote Sensor Kit",
           complexity: "Moderate" as const,
           compatible: true
-        },
-        {
-          category: "Maintenance",
-          code: "DFR201",
-          description: "High-Efficiency Filter Rack",
-          complexity: "Easy" as const,
-          compatible: true
         }
       ]
     }));
@@ -193,12 +179,6 @@ export default function SpecificationSearchResults({
     "Heat Pump": "heat-pump",
     "Gas/Electric": "gas-electric", 
     "Straight A/C": "straight-ac"
-  } as const;
-
-  const reverseSystemTypeMap = {
-    "heat-pump": "Heat Pump",
-    "gas-electric": "Gas/Electric",
-    "straight-ac": "Straight A/C"
   } as const;
 
   // Filter and sort units
@@ -307,13 +287,6 @@ export default function SpecificationSearchResults({
     // TODO: Implement export functionality
   };
 
-  // Handle search parameter updates (if callback provided)
-  const handleUpdateSearch = (newParams: SpecSearchInput) => {
-    if (onUpdateSearch) {
-      onUpdateSearch(newParams);
-    }
-  };
-
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
       {/* Header */}
@@ -345,52 +318,12 @@ export default function SpecificationSearchResults({
       </div>
 
       {/* Inline Edit Controls for Search Parameters */}
-      {onUpdateSearch ? (
-        <InlineEditControls
-          searchParams={searchParams}
-          onUpdateSearch={handleUpdateSearch}
-          onCancel={onBackToSpecForm}
-          resultCount={filteredAndSortedUnits.length}
-        />
-      ) : (
-        // Fallback to simple criteria display if no update callback
-        <Card className="bg-muted/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Search Criteria
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">System Type:</span>
-                <div className="font-medium">{searchParams.systemType}</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Tonnage:</span>
-                <div className="font-medium">{searchParams.tonnage} Ton</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Voltage:</span>
-                <div className="font-medium">{searchParams.voltage}V</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Phases:</span>
-                <div className="font-medium">{searchParams.phases} Phase</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Efficiency:</span>
-                <div className="font-medium capitalize">{searchParams.efficiency}</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Results:</span>
-                <div className="font-medium text-primary">{searchResults.count} units</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <InlineEditControls
+        searchParams={searchParams}
+        onUpdateSearch={onUpdateSearch}
+        onCancel={onBackToSpecForm}
+        resultCount={filteredAndSortedUnits.length}
+      />
 
       {/* Controls Row */}
       <div className="flex flex-col lg:flex-row gap-4">
