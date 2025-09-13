@@ -17,6 +17,8 @@ import {
   advancedMatchingResponseSchema,
   familyValidationRequestSchema,
   familyValidationResponseSchema,
+  familyOptionsRequestSchema,
+  familyOptionsResponseSchema,
   insertUserSchema,
   insertProjectSchema,
   insertProjectUnitSchema,
@@ -707,6 +709,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "An error occurred during family validation"
+      });
+    }
+  });
+
+  // Family options endpoint
+  app.post("/api/family-options", async (req, res) => {
+    try {
+      const optionsRequest = familyOptionsRequestSchema.parse(req.body);
+      const { family, manufacturer } = optionsRequest;
+      
+      // Import catalog data
+      const { 
+        FAMILY_DEFINITIONS, 
+        POSITION_MAPPINGS, 
+        NOMINAL_TONNAGES,
+        ELECTRICAL_ADD_ONS,
+        CONTROL_ADD_ONS,
+        REFRIGERANT_ADD_ONS,
+        FIELD_ACCESSORIES,
+        getCapacityFromCode,
+        getGasBTUFromCode,
+        getElectricKWFromCode
+      } = await import("./data/daikinCatalog");
+      
+      // If family is specified, get options for specific family
+      if (family && FAMILY_DEFINITIONS[family]) {
+        const familyConfig = FAMILY_DEFINITIONS[family];
+        const positionMapping = POSITION_MAPPINGS[family];
+        
+        // Build tonnage ladder from capacity codes with proper validation
+        const tonnageLadder = familyConfig.capacity_allowed
+          .map(code => {
+            const capacity = getCapacityFromCode(code, family);
+            if (capacity <= 0) return null;
+            
+            const tonnage = NOMINAL_TONNAGES.find(t => Math.abs(t.btuCapacity - capacity) < 1000);
+            let tonnageValue = tonnage?.tonnage;
+            
+            // Fallback calculation if not found in NOMINAL_TONNAGES
+            if (!tonnageValue) {
+              const calculatedTonnage = (capacity / 12000).toFixed(1);
+              // Map to closest valid enum value
+              const validTonnages = ["1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "5.0", "6.0", "7.5", "8.5", "10.0", "12.5", "15.0", "20.0", "25.0"];
+              tonnageValue = validTonnages.find(t => Math.abs(parseFloat(t) - parseFloat(calculatedTonnage)) < 0.3) || "5.0";
+            }
+            
+            return {
+              code,
+              tonnage: tonnageValue,
+              btu_capacity: capacity,
+              display_name: `${tonnageValue} Ton (${capacity} BTU)`
+            };
+          })
+          .filter(item => item !== null);
+        
+        // Build voltage/phase combinations
+        const voltagePhases = familyConfig.voltage_phase_combinations?.map(combo => ({
+          voltage_code: combo.voltage_code,
+          phase_code: combo.phase_code,
+          voltage: combo.description.includes("208-230") ? "208-230" as const : 
+                   combo.description.includes("460") ? "460" as const : "575" as const,
+          phases: combo.description.includes("1") ? "1" as const : "3" as const,
+          description: combo.description
+        })) || [];
+        
+        // Build gas BTU options if applicable
+        const gasBtuOptions = familyConfig.requires_gas_btu && positionMapping?.gas_btu ? 
+          Object.entries(positionMapping.gas_btu).map(([code, btu]) => ({
+            code,
+            btu_value: btu,
+            display_name: `${btu} BTU`
+          })) : [];
+        
+        // Build electric kW options if applicable  
+        const electricKwOptions = familyConfig.requires_electric_heat && positionMapping?.electric_kw ? 
+          Object.entries(positionMapping.electric_kw).map(([code, kw]) => ({
+            code,
+            kw_value: kw,
+            display_name: `${kw} kW`
+          })) : [];
+        
+        // Get available controls
+        const controlsAvailable = familyConfig.controls_allowed || [];
+        
+        // Get refrigerant systems and heat exchanger options from position mapping
+        const refrigerantSystems = positionMapping?.refrigerant_system ? 
+          Object.keys(positionMapping.refrigerant_system) : ["A"];
+        const heatExchangerOptions = positionMapping?.heat_exchanger ? 
+          Object.keys(positionMapping.heat_exchanger) : ["X"];
+        
+        // Filter field accessories compatible with this family
+        const compatibleFieldAccessories = FIELD_ACCESSORIES.filter(accessory => 
+          accessory.compatible.includes("all") || 
+          accessory.compatible.includes(family)
+        );
+        
+        const response = {
+          success: true,
+          family,
+          options: {
+            tonnage_ladder: tonnageLadder,
+            voltage_phase_combinations: voltagePhases,
+            gas_btu_options: gasBtuOptions.length > 0 ? gasBtuOptions : undefined,
+            electric_kw_options: electricKwOptions.length > 0 ? electricKwOptions : undefined,
+            factory_accessories: [...ELECTRICAL_ADD_ONS, ...CONTROL_ADD_ONS, ...REFRIGERANT_ADD_ONS],
+            field_accessories: compatibleFieldAccessories,
+            efficiency_levels: ["standard", "high"],
+            system_types: [familyConfig.type.includes("Heat Pump") ? "Heat Pump" : 
+                          familyConfig.type.includes("Gas") ? "Gas/Electric" : "Straight A/C"], // Map to valid enum values
+            controls_available: controlsAvailable,
+            refrigerant_systems: refrigerantSystems,
+            heat_exchanger_options: heatExchangerOptions
+          },
+          family_config: familyConfig,
+          requirements: {
+            requires_gas_btu: familyConfig.requires_gas_btu || false,
+            requires_electric_heat: familyConfig.requires_electric_heat || false,
+            min_capacity_tons: familyConfig.min_capacity_tons,
+            max_capacity_tons: familyConfig.max_capacity_tons
+          }
+        };
+        
+        const validatedResponse = familyOptionsResponseSchema.parse(response);
+        res.json(validatedResponse);
+        
+      } else if (manufacturer === "Daikin" || !family) {
+        // Return options for all families
+        const allFamilies = Object.keys(FAMILY_DEFINITIONS);
+        const allTonnages = Array.from(new Set(
+          Object.values(FAMILY_DEFINITIONS).flatMap(config => 
+            config.capacity_allowed.map(code => {
+              const capacity = getCapacityFromCode(code, Object.keys(FAMILY_DEFINITIONS)[0]);
+              const tonnage = NOMINAL_TONNAGES.find(t => Math.abs(t.btuCapacity - capacity) < 1000);
+              return tonnage?.tonnage || (capacity / 12000).toFixed(1);
+            })
+          )
+        )).map(tonnage => ({
+          code: "",
+          tonnage,
+          btu_capacity: parseFloat(tonnage) * 12000,
+          display_name: `${tonnage} Ton`
+        }));
+        
+        const response = {
+          success: true,
+          manufacturer: "Daikin",
+          options: {
+            tonnage_ladder: allTonnages,
+            voltage_phase_combinations: [
+              { voltage_code: "1", phase_code: "1", voltage: "208-230" as const, phases: "1" as const, description: "208-230V 1-Phase" },
+              { voltage_code: "3", phase_code: "3", voltage: "208-230" as const, phases: "3" as const, description: "208-230V 3-Phase" },
+              { voltage_code: "4", phase_code: "3", voltage: "460" as const, phases: "3" as const, description: "460V 3-Phase" },
+              { voltage_code: "7", phase_code: "3", voltage: "575" as const, phases: "3" as const, description: "575V 3-Phase" }
+            ],
+            factory_accessories: [...ELECTRICAL_ADD_ONS, ...CONTROL_ADD_ONS, ...REFRIGERANT_ADD_ONS],
+            field_accessories: FIELD_ACCESSORIES,
+            efficiency_levels: ["standard", "high"],
+            system_types: ["Heat Pump", "Gas/Electric", "Straight A/C"],
+            controls_available: ["A", "B", "C", "D"],
+            refrigerant_systems: ["A"],
+            heat_exchanger_options: ["X"]
+          }
+        };
+        
+        const validatedResponse = familyOptionsResponseSchema.parse(response);
+        res.json(validatedResponse);
+        
+      } else {
+        return res.status(404).json({
+          error: "Family not found",
+          message: `Family "${family}" not found in Daikin catalog`
+        });
+      }
+      
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid family options request",
+          details: error.errors
+        });
+      }
+      
+      console.error("Family options error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "An error occurred while fetching family options"
       });
     }
   });

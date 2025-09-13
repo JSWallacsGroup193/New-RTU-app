@@ -858,6 +858,91 @@ export const familyValidationResponseSchema = z.object({
 export type FamilyValidationResponse = z.infer<typeof familyValidationResponseSchema>;
 
 // ============================================================================
+// FAMILY OPTIONS SCHEMAS
+// ============================================================================
+
+// Family options request
+export const familyOptionsRequestSchema = z.object({
+  family: daikinFamilyKeysEnum.optional(), // If not provided, returns options for all families
+  manufacturer: z.string().optional() // Alternative to family for broader queries
+});
+
+export type FamilyOptionsRequest = z.infer<typeof familyOptionsRequestSchema>;
+
+// Family options response
+export const familyOptionsResponseSchema = z.object({
+  success: z.boolean(),
+  family: daikinFamilyKeysEnum.optional(),
+  manufacturer: z.string().optional(),
+  options: z.object({
+    // Available tonnage options with BTU mappings
+    tonnage_ladder: z.array(z.object({
+      code: z.string(),
+      tonnage: tonnageEnum,
+      btu_capacity: z.number(),
+      display_name: z.string()
+    })),
+    
+    // Voltage and phase combinations
+    voltage_phase_combinations: z.array(z.object({
+      voltage_code: z.string(),
+      phase_code: z.string(),
+      voltage: voltageEnum,
+      phases: phaseEnum,
+      description: z.string()
+    })),
+    
+    // BTU options for gas/electric systems
+    gas_btu_options: z.array(z.object({
+      code: z.string(),
+      btu_value: z.number(),
+      display_name: z.string()
+    })).optional(),
+    
+    // Electric heat kit options for heat pumps
+    electric_kw_options: z.array(z.object({
+      code: z.string(),
+      kw_value: z.number(),
+      display_name: z.string()
+    })).optional(),
+    
+    // Factory-installed options
+    factory_accessories: z.array(factoryInstalledOptionSchema),
+    
+    // Field accessories
+    field_accessories: z.array(fieldAccessorySchema),
+    
+    // Efficiency levels available
+    efficiency_levels: z.array(efficiencyEnum),
+    
+    // Valid system types for this family
+    system_types: z.array(systemTypeEnum),
+    
+    // Controls available
+    controls_available: z.array(z.string()),
+    
+    // Refrigerant systems available
+    refrigerant_systems: z.array(z.string()),
+    
+    // Heat exchanger options
+    heat_exchanger_options: z.array(z.string())
+  }),
+  
+  // Family configuration details
+  family_config: daikinFamilyConfigSchema.optional(),
+  
+  // Validation requirements
+  requirements: z.object({
+    requires_gas_btu: z.boolean(),
+    requires_electric_heat: z.boolean(),
+    min_capacity_tons: z.number().optional(),
+    max_capacity_tons: z.number().optional()
+  }).optional()
+});
+
+export type FamilyOptionsResponse = z.infer<typeof familyOptionsResponseSchema>;
+
+// ============================================================================
 // COMPREHENSIVE API RESPONSE UPDATES
 // ============================================================================
 
