@@ -1,4 +1,4 @@
-import { DecodeResponse, SpecSearchResponse } from "@shared/schema";
+import { DecodeResponse, SpecSearchResponse, SpecSearchInput } from "@shared/schema";
 
 // Decode model number API call
 export const decodeModelNumber = async (modelNumber: string): Promise<DecodeResponse> => {
@@ -19,12 +19,7 @@ export const decodeModelNumber = async (modelNumber: string): Promise<DecodeResp
 };
 
 // Search by specifications API call
-export const searchBySpecs = async (params: {
-  btuMin: number;
-  btuMax: number;
-  systemType?: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  voltage?: string;
-}): Promise<SpecSearchResponse> => {
+export const searchBySpecs = async (params: SpecSearchInput): Promise<SpecSearchResponse> => {
   const response = await fetch("/api/search-specs", {
     method: "POST",
     headers: {

@@ -563,3 +563,352 @@ export const enhancedSpecSearchResponseSchema = z.object({
 });
 
 export type EnhancedSpecSearchResponse = z.infer<typeof enhancedSpecSearchResponseSchema>;
+
+// ============================================================================
+// POSITION-BASED MODEL BUILDING ARCHITECTURE
+// ============================================================================
+
+// Model positions for position-based building
+export const modelPositionsSchema = z.object({
+  p1: z.string(),        // Brand (D)
+  p2: z.string(),        // Tier (S/H)
+  p3: z.string(),        // Application (C/G/H)
+  p4_p6: z.string(),     // Capacity (036-300)
+  p7: z.string(),        // Voltage (1/3/4/7)
+  p8: z.string(),        // Supply Fan/Drive (D/L/W)
+  p9_p11: z.string(),    // Heat Field (Gas BTU or Electric kW)
+  p12: z.string(),       // Controls (A/B/C)
+  p13: z.string(),       // Refrigeration System (A/C/F/G/H)
+  p14: z.string(),       // Heat Exchanger (X/A/S/U)
+  p15_p24: z.string()    // Options Block (10 characters)
+});
+
+export type ModelPositions = z.infer<typeof modelPositionsSchema>;
+
+// Fallback strategy for mathematical matching
+export const fallbackStrategySchema = z.object({
+  selection_strategy: z.enum(["nearest", "exact"]),
+  tie_breaker: z.enum(["round_half_up_to_higher", "round_half_down_to_lower"]),
+  bounds_strategy: z.enum(["clip_to_min_max", "error_on_bounds"])
+});
+
+export type FallbackStrategy = z.infer<typeof fallbackStrategySchema>;
+
+// Size ladder for neighboring matches
+export const sizeLadderSchema = <T extends z.ZodSchema>(valueSchema: T) =>
+  z.object({
+    direct_match: z.object({
+      code: z.string(),
+      value: valueSchema
+    }),
+    size_smaller: z.object({
+      code: z.string(),
+      value: valueSchema
+    }).nullable(),
+    size_larger: z.object({
+      code: z.string(),
+      value: valueSchema
+    }).nullable()
+  });
+
+// Specific size ladder types
+export const capacitySizeLadderSchema = sizeLadderSchema(z.number());
+export const gasBtuSizeLadderSchema = sizeLadderSchema(z.number());
+export const electricKwSizeLadderSchema = sizeLadderSchema(z.number());
+
+export type CapacitySizeLadder = z.infer<typeof capacitySizeLadderSchema>;
+export type GasBtuSizeLadder = z.infer<typeof gasBtuSizeLadderSchema>;
+export type ElectricKwSizeLadder = z.infer<typeof electricKwSizeLadderSchema>;
+
+// ============================================================================
+// FAMILY-SPECIFIC DEFINITIONS
+// ============================================================================
+
+// Daikin family configuration
+export const daikinFamilyConfigSchema = z.object({
+  series_prefix: z.string(),
+  type: z.string(),
+  defaults: modelPositionsSchema.partial(),
+  capacity_allowed: z.array(z.string()),
+  controls_allowed: z.array(z.string()),
+  requires_gas_btu: z.boolean().optional(),
+  requires_electric_heat: z.boolean().optional(),
+  voltage_phase_combinations: z.array(z.object({
+    voltage_code: z.string(),
+    phase_code: z.string(),
+    description: z.string()
+  })).optional(),
+  min_capacity_tons: z.number().optional(),
+  max_capacity_tons: z.number().optional()
+});
+
+export type DaikinFamilyConfig = z.infer<typeof daikinFamilyConfigSchema>;
+
+// Family definitions enum
+export const daikinFamilyKeysEnum = z.enum([
+  "DSC",        // Straight A/C - Standard
+  "DHC",        // Straight A/C - High
+  "DSG",        // Gas/Electric - Standard
+  "DHG",        // Gas/Electric - High
+  "DSH_3to6",   // Heat Pump - Standard (3-6T)
+  "DSH_7p5to10", // Heat Pump - Standard (7.5-10T)
+  "DHH"         // Heat Pump - High (3-6T)
+]);
+
+export type DaikinFamilyKeys = z.infer<typeof daikinFamilyKeysEnum>;
+
+// Complete family definitions mapping
+export const familyDefinitionsSchema = z.record(
+  daikinFamilyKeysEnum,
+  daikinFamilyConfigSchema
+);
+
+export type FamilyDefinitions = z.infer<typeof familyDefinitionsSchema>;
+
+// ============================================================================
+// ENHANCED RESULT TYPES
+// ============================================================================
+
+// Enhanced replacement result with comprehensive matching
+export const enhancedReplacementResultSchema = z.object({
+  model: z.string(),
+  capacity_match: capacitySizeLadderSchema,
+  gas_btu_match: gasBtuSizeLadderSchema.optional(),
+  electric_kw_match: electricKwSizeLadderSchema.optional(),
+  specifications: daikinUnitSpecSchema,
+  family: daikinFamilyKeysEnum,
+  positions: modelPositionsSchema,
+  match_quality: z.object({
+    capacity_exactness: z.number(), // 0-1 score
+    gas_btu_exactness: z.number().optional(),
+    electric_kw_exactness: z.number().optional(),
+    overall_score: z.number(),
+    match_explanation: z.string()
+  }),
+  fallback_applied: z.object({
+    capacity: z.boolean(),
+    gas_btu: z.boolean().optional(),
+    electric_kw: z.boolean().optional(),
+    bounds_clipping: z.array(z.string()).default([])
+  })
+});
+
+export type EnhancedReplacementResult = z.infer<typeof enhancedReplacementResultSchema>;
+
+// ============================================================================
+// POSITION MAPPING INTERFACES
+// ============================================================================
+
+// Position value mappings
+export const positionMappingSchema = z.object({
+  p1: z.record(z.string(), z.string()), // Brand codes
+  p2: z.record(z.string(), z.string()), // Tier codes
+  p3: z.record(z.string(), z.string()), // Application codes
+  p4_p6: z.record(z.string(), z.number()), // Capacity codes to tonnage
+  p7: z.record(z.string(), z.string()), // Voltage codes
+  p8: z.record(z.string(), z.string()), // Supply fan/drive codes
+  p9_p11_gas: z.record(z.string(), z.number()), // Gas BTU codes
+  p9_p11_electric: z.record(z.string(), z.number()), // Electric kW codes
+  p12: z.record(z.string(), z.string()), // Controls codes
+  p13: z.record(z.string(), z.string()), // Refrigeration system codes
+  p14: z.record(z.string(), z.string())  // Heat exchanger codes
+});
+
+export type PositionMapping = z.infer<typeof positionMappingSchema>;
+
+// ============================================================================
+// MODEL BUILDING REQUEST/RESPONSE SCHEMAS
+// ============================================================================
+
+// Request to build model with fallback
+export const buildModelRequestSchema = z.object({
+  family: daikinFamilyKeysEnum,
+  tons: z.number().positive(),
+  voltage: z.string(),
+  fan_drive: z.string().optional().default("D"),
+  controls: z.string().optional().default("A"),
+  refrig_sys: z.string().optional().default("A"),
+  gas_btu_numeric: z.number().optional(),
+  electric_kw: z.number().optional(),
+  heat_exchanger: z.string().optional().default("X"),
+  accessories: z.record(z.string()).optional().default({}),
+  fallback_strategy: fallbackStrategySchema.optional()
+});
+
+export type BuildModelRequest = z.infer<typeof buildModelRequestSchema>;
+
+// Response from model building
+export const buildModelResponseSchema = z.object({
+  success: z.boolean(),
+  result: enhancedReplacementResultSchema.optional(),
+  errors: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  validation_results: z.object({
+    family_compatible: z.boolean(),
+    capacity_valid: z.boolean(),
+    gas_btu_valid: z.boolean().optional(),
+    voltage_phase_valid: z.boolean(),
+    all_positions_valid: z.boolean()
+  })
+});
+
+export type BuildModelResponse = z.infer<typeof buildModelResponseSchema>;
+
+// ============================================================================
+// MODEL PARSING SCHEMAS
+// ============================================================================
+
+// Parse model to positions request
+export const parseModelRequestSchema = z.object({
+  model_number: z.string().min(3).max(50),
+  validate: z.boolean().default(true)
+});
+
+export type ParseModelRequest = z.infer<typeof parseModelRequestSchema>;
+
+// Parse model to positions response
+export const parseModelResponseSchema = z.object({
+  success: z.boolean(),
+  positions: modelPositionsSchema.optional(),
+  family: daikinFamilyKeysEnum.optional(),
+  parsed_values: z.object({
+    brand: z.string().optional(),
+    tier: z.string().optional(),
+    application: z.string().optional(),
+    capacity_tons: z.number().optional(),
+    voltage_description: z.string().optional(),
+    gas_btu: z.number().optional(),
+    electric_kw: z.number().optional()
+  }).optional(),
+  validation_errors: z.array(z.string()).default([])
+});
+
+export type ParseModelResponse = z.infer<typeof parseModelResponseSchema>;
+
+// ============================================================================
+// ADVANCED MATCHING SCHEMAS
+// ============================================================================
+
+// Advanced matching request with multiple strategies
+export const advancedMatchingRequestSchema = z.object({
+  original_capacity: z.number(),
+  original_gas_btu: z.number().optional(),
+  original_electric_kw: z.number().optional(),
+  preferred_families: z.array(daikinFamilyKeysEnum).optional(),
+  voltage_preference: z.array(z.string()).optional(),
+  efficiency_preference: efficiencyEnum.optional(),
+  fallback_strategy: fallbackStrategySchema.optional(),
+  include_size_ladders: z.boolean().default(true),
+  max_results: z.number().min(1).max(50).default(10)
+});
+
+export type AdvancedMatchingRequest = z.infer<typeof advancedMatchingRequestSchema>;
+
+// Advanced matching response
+export const advancedMatchingResponseSchema = z.object({
+  matches: z.array(enhancedReplacementResultSchema),
+  matching_summary: z.object({
+    total_matches: z.number(),
+    exact_matches: z.number(),
+    fallback_matches: z.number(),
+    families_searched: z.array(daikinFamilyKeysEnum),
+    best_match_score: z.number()
+  }),
+  size_analysis: z.object({
+    original_tonnage_exact: z.number(),
+    nearest_standard_tonnage: tonnageEnum,
+    capacity_ladders_generated: z.number(),
+    gas_btu_ladders_generated: z.number(),
+    electric_kw_ladders_generated: z.number()
+  }).optional()
+});
+
+export type AdvancedMatchingResponse = z.infer<typeof advancedMatchingResponseSchema>;
+
+// ============================================================================
+// VALIDATION AND UTILITY SCHEMAS
+// ============================================================================
+
+// Family validation request
+export const familyValidationRequestSchema = z.object({
+  positions: modelPositionsSchema,
+  family: daikinFamilyKeysEnum
+});
+
+export type FamilyValidationRequest = z.infer<typeof familyValidationRequestSchema>;
+
+// Family validation response
+export const familyValidationResponseSchema = z.object({
+  is_valid: z.boolean(),
+  validation_details: z.object({
+    capacity_valid: z.boolean(),
+    controls_valid: z.boolean(),
+    gas_btu_required_check: z.boolean().optional(),
+    electric_heat_check: z.boolean().optional(),
+    voltage_phase_check: z.boolean()
+  }),
+  errors: z.array(z.string()).default([]),
+  suggested_corrections: z.array(z.object({
+    position: z.string(),
+    current_value: z.string(),
+    suggested_value: z.string(),
+    reason: z.string()
+  })).default([])
+});
+
+export type FamilyValidationResponse = z.infer<typeof familyValidationResponseSchema>;
+
+// ============================================================================
+// COMPREHENSIVE API RESPONSE UPDATES
+// ============================================================================
+
+// Enhanced decode response with position-based results
+export const positionBasedDecodeResponseSchema = z.object({
+  originalUnit: parsedModelSchema,
+  enhanced_results: z.array(enhancedReplacementResultSchema),
+  position_analysis: z.object({
+    parsed_positions: modelPositionsSchema.optional(),
+    detected_family: daikinFamilyKeysEnum.optional(),
+    capacity_ladder: capacitySizeLadderSchema.optional(),
+    gas_btu_ladder: gasBtuSizeLadderSchema.optional(),
+    electric_kw_ladder: electricKwSizeLadderSchema.optional()
+  }),
+  legacy_compatibility: z.object({
+    legacy_replacements: z.array(replacementSchema),
+    enhanced_replacements: z.array(enhancedReplacementSchema)
+  }),
+  matching_metadata: z.object({
+    total_processing_time_ms: z.number(),
+    fallback_strategies_used: z.array(z.string()),
+    families_evaluated: z.array(daikinFamilyKeysEnum),
+    match_confidence_score: z.number()
+  })
+});
+
+export type PositionBasedDecodeResponse = z.infer<typeof positionBasedDecodeResponseSchema>;
+
+// Enhanced spec search with position-based filtering
+export const positionBasedSpecSearchResponseSchema = z.object({
+  results: z.array(enhancedReplacementResultSchema),
+  count: z.number(),
+  search_metadata: z.object({
+    families_searched: z.array(daikinFamilyKeysEnum),
+    capacity_ladders_used: z.number(),
+    fallback_applied: z.boolean(),
+    exact_matches: z.number(),
+    near_matches: z.number()
+  }),
+  available_refinements: z.object({
+    families: z.array(daikinFamilyKeysEnum),
+    capacity_ranges: z.array(z.object({
+      family: daikinFamilyKeysEnum,
+      min_tons: z.number(),
+      max_tons: z.number(),
+      available_sizes: z.array(z.string())
+    })),
+    voltage_options: z.array(z.string()),
+    efficiency_tiers: z.array(efficiencyEnum)
+  })
+});
+
+export type PositionBasedSpecSearchResponse = z.infer<typeof positionBasedSpecSearchResponseSchema>;

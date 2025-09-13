@@ -2,6 +2,10 @@ import {
   type DaikinUnitSpec, 
   type DaikinFamily,
   type NominalTonnages,
+  type PositionMapping,
+  type FamilyDefinitions,
+  type DaikinFamilyConfig,
+  type DaikinFamilyKeys,
   factoryInstalledOptionSchema,
   fieldAccessorySchema,
   systemTypeEnum,
@@ -595,3 +599,485 @@ export function isValidVoltagePhase(voltage: string, phases: string): boolean {
   
   return validCombinations.some(combo => combo.voltage === voltage && combo.phases === phases);
 }
+
+// ============================================================================
+// COMPREHENSIVE POSITION-BASED MAPPING TABLES
+// ============================================================================
+
+// Master position mappings based on Daikin R-32 schema
+export const POSITION_MAPPINGS: PositionMapping = {
+  p1: {
+    "D": "Daikin"
+  },
+  p2: {
+    "S": "Standard Efficiency",
+    "H": "High Efficiency"
+  },
+  p3: {
+    "C": "Straight A/C",
+    "G": "Gas/Electric", 
+    "H": "Heat Pump"
+  },
+  p4_p6: {
+    "036": 3.0,
+    "048": 4.0,
+    "060": 5.0,
+    "072": 6.0,
+    "090": 7.5,
+    "102": 8.5,
+    "120": 10.0,
+    "150": 12.5,
+    "180": 15.0,
+    "240": 20.0,
+    "300": 25.0
+  },
+  p7: {
+    "1": "208/230V 1φ 60Hz",
+    "3": "208/230V 3φ 60Hz",
+    "4": "460V 3φ 60Hz",
+    "7": "575V 3φ 60Hz"
+  },
+  p8: {
+    "D": "Direct Drive - Standard Static",
+    "L": "Direct Drive - Medium Static",
+    "W": "Direct Drive - High Static"
+  },
+  p9_p11_gas: {
+    "045": 45000,
+    "060": 60000,
+    "070": 70000,
+    "080": 80000,
+    "090": 90000,
+    "100": 100000,
+    "115": 115000,
+    "125": 125000,
+    "130": 130000,
+    "140": 140000,
+    "150": 150000,
+    "180": 180000,
+    "210": 210000,
+    "225": 225000,
+    "240": 240000,
+    "260": 260000,
+    "350": 350000,
+    "360": 360000,
+    "400": 400000,
+    "480": 480000
+  },
+  p9_p11_electric: {
+    "XXX": 0, // No electric heat
+    "005": 5,
+    "010": 10,
+    "015": 15,
+    "020": 20,
+    "030": 30,
+    "045": 45,
+    "060": 60,
+    "075": 75,
+    "S05": 5,  // SCR variants
+    "S10": 10,
+    "S15": 15,
+    "S16": 15,
+    "S18": 18,
+    "S20": 20,
+    "S21": 20,
+    "S22": 20,
+    "S25": 25,
+    "S30": 30,
+    "S31": 30,
+    "S45": 45,
+    "S46": 45,
+    "S60": 60,
+    "S75": 75
+  },
+  p12: {
+    "A": "Electromechanical",
+    "B": "DDC/BACnet (Standard families)",
+    "C": "DDC/BACnet (High-efficiency families)"
+  },
+  p13: {
+    "A": "Single stage",
+    "C": "Two stage",
+    "F": "Two stage + HGRH + Low Ambient",
+    "G": "Single stage + Low Ambient",
+    "H": "Two stage + Low Ambient"
+  },
+  p14: {
+    "X": "N/A for non-gas or None",
+    "A": "Aluminized Steel",
+    "S": "Stainless Steel",
+    "U": "Ultra Low NOx"
+  }
+};
+
+// ============================================================================
+// COMPREHENSIVE FAMILY DEFINITIONS
+// ============================================================================
+
+export const FAMILY_DEFINITIONS: FamilyDefinitions = {
+  DSC: {
+    series_prefix: "DSC",
+    type: "Straight A/C — Standard",
+    defaults: {
+      p1: "D",
+      p2: "S",
+      p3: "C",
+      p8: "D",
+      p12: "A",
+      p13: "A",
+      p14: "X",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["036", "048", "060", "072", "090", "102", "120", "150", "180", "240", "300"],
+    controls_allowed: ["A", "B"],
+    requires_gas_btu: false,
+    requires_electric_heat: false,
+    voltage_phase_combinations: [
+      { voltage_code: "1", phase_code: "1", description: "208/230V 1φ" },
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" },
+      { voltage_code: "7", phase_code: "3", description: "575V 3φ" }
+    ],
+    min_capacity_tons: 3.0,
+    max_capacity_tons: 25.0
+  },
+  DHC: {
+    series_prefix: "DHC",
+    type: "Straight A/C — High",
+    defaults: {
+      p1: "D",
+      p2: "H",
+      p3: "C",
+      p8: "D",
+      p12: "C",
+      p13: "A",
+      p14: "X",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["036", "048", "060", "072", "090", "102", "120", "150", "180"],
+    controls_allowed: ["C"],
+    requires_gas_btu: false,
+    requires_electric_heat: false,
+    voltage_phase_combinations: [
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" },
+      { voltage_code: "7", phase_code: "3", description: "575V 3φ" }
+    ],
+    min_capacity_tons: 3.0,
+    max_capacity_tons: 15.0
+  },
+  DSG: {
+    series_prefix: "DSG",
+    type: "Gas/Electric — Standard",
+    defaults: {
+      p1: "D",
+      p2: "S",
+      p3: "G",
+      p8: "D",
+      p12: "A",
+      p13: "A",
+      p14: "A",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["036", "048", "060", "072", "090", "102", "120", "150", "180", "240", "300"],
+    controls_allowed: ["A", "B"],
+    requires_gas_btu: true,
+    requires_electric_heat: false,
+    voltage_phase_combinations: [
+      { voltage_code: "1", phase_code: "1", description: "208/230V 1φ" },
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" },
+      { voltage_code: "7", phase_code: "3", description: "575V 3φ" }
+    ],
+    min_capacity_tons: 3.0,
+    max_capacity_tons: 25.0
+  },
+  DHG: {
+    series_prefix: "DHG",
+    type: "Gas/Electric — High",
+    defaults: {
+      p1: "D",
+      p2: "H",
+      p3: "G",
+      p8: "D",
+      p12: "C",
+      p13: "A",
+      p14: "A",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["036", "048", "060", "072", "090", "102", "120", "150", "180"],
+    controls_allowed: ["C"],
+    requires_gas_btu: true,
+    requires_electric_heat: false,
+    voltage_phase_combinations: [
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" },
+      { voltage_code: "7", phase_code: "3", description: "575V 3φ" }
+    ],
+    min_capacity_tons: 3.0,
+    max_capacity_tons: 15.0
+  },
+  DSH_3to6: {
+    series_prefix: "DSH",
+    type: "Heat Pump — Standard (3-6T)",
+    defaults: {
+      p1: "D",
+      p2: "S",
+      p3: "H",
+      p8: "D",
+      p12: "A",
+      p13: "A",
+      p14: "X",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["036", "048", "060", "072"],
+    controls_allowed: ["A", "B"],
+    requires_gas_btu: false,
+    requires_electric_heat: true,
+    voltage_phase_combinations: [
+      { voltage_code: "1", phase_code: "1", description: "208/230V 1φ" },
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" }
+    ],
+    min_capacity_tons: 3.0,
+    max_capacity_tons: 6.0
+  },
+  DSH_7p5to10: {
+    series_prefix: "DSH",
+    type: "Heat Pump — Standard (7.5-10T)",
+    defaults: {
+      p1: "D",
+      p2: "S",
+      p3: "H",
+      p8: "D",
+      p12: "A",
+      p13: "A",
+      p14: "X",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["090", "120"],
+    controls_allowed: ["A", "B"],
+    requires_gas_btu: false,
+    requires_electric_heat: true,
+    voltage_phase_combinations: [
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" },
+      { voltage_code: "7", phase_code: "3", description: "575V 3φ" }
+    ],
+    min_capacity_tons: 7.5,
+    max_capacity_tons: 10.0
+  },
+  DHH: {
+    series_prefix: "DHH",
+    type: "Heat Pump — High (3-6T)",
+    defaults: {
+      p1: "D",
+      p2: "H",
+      p3: "H",
+      p8: "D",
+      p12: "C",
+      p13: "A",
+      p14: "X",
+      p15_p24: "XXXXXXXXXX"
+    },
+    capacity_allowed: ["036", "048", "060", "072"],
+    controls_allowed: ["C"],
+    requires_gas_btu: false,
+    requires_electric_heat: true,
+    voltage_phase_combinations: [
+      { voltage_code: "3", phase_code: "3", description: "208/230V 3φ" },
+      { voltage_code: "4", phase_code: "3", description: "460V 3φ" }
+    ],
+    min_capacity_tons: 3.0,
+    max_capacity_tons: 6.0
+  }
+};
+
+// ============================================================================
+// ENHANCED HELPER FUNCTIONS FOR POSITION-BASED OPERATIONS
+// ============================================================================
+
+// Get position value description
+export function getPositionDescription(position: keyof PositionMapping, code: string): string {
+  const mapping = POSITION_MAPPINGS[position];
+  if (typeof mapping === 'object' && code in mapping) {
+    return String(mapping[code]);
+  }
+  return `Unknown code: ${code}`;
+}
+
+// Get capacity in tons from p4_p6 code
+export function getCapacityFromCode(capacityCode: string): number {
+  return POSITION_MAPPINGS.p4_p6[capacityCode] || 0;
+}
+
+// Get gas BTU from p9_p11 code
+export function getGasBTUFromCode(gasBtuCode: string): number {
+  return POSITION_MAPPINGS.p9_p11_gas[gasBtuCode] || 0;
+}
+
+// Get electric kW from p9_p11 code
+export function getElectricKWFromCode(electricCode: string): number {
+  return POSITION_MAPPINGS.p9_p11_electric[electricCode] || 0;
+}
+
+// Find nearest capacity code with fallback strategy
+export function findNearestCapacityCode(
+  targetTons: number, 
+  familyKey: DaikinFamilyKeys,
+  strategy: 'nearest' | 'exact' = 'nearest'
+): { code: string; value: number } | null {
+  const family = FAMILY_DEFINITIONS[familyKey];
+  if (!family) return null;
+
+  const allowedCapacities = family.capacity_allowed
+    .map(code => ({ code, value: getCapacityFromCode(code) }))
+    .filter(cap => cap.value > 0)
+    .sort((a, b) => a.value - b.value);
+
+  if (strategy === 'exact') {
+    const exact = allowedCapacities.find(cap => Math.abs(cap.value - targetTons) < 0.1);
+    return exact || null;
+  }
+
+  // Nearest strategy
+  if (allowedCapacities.length === 0) return null;
+  
+  let nearest = allowedCapacities[0];
+  let minDiff = Math.abs(nearest.value - targetTons);
+  
+  for (const cap of allowedCapacities) {
+    const diff = Math.abs(cap.value - targetTons);
+    if (diff < minDiff) {
+      minDiff = diff;
+      nearest = cap;
+    }
+  }
+  
+  return nearest;
+}
+
+// Find nearest gas BTU code
+export function findNearestGasBTUCode(
+  targetBTU: number,
+  strategy: 'nearest' | 'exact' = 'nearest'
+): { code: string; value: number } | null {
+  const availableGasBTUs = Object.entries(POSITION_MAPPINGS.p9_p11_gas)
+    .map(([code, value]) => ({ code, value }))
+    .sort((a, b) => a.value - b.value);
+
+  if (strategy === 'exact') {
+    const exact = availableGasBTUs.find(btu => Math.abs(btu.value - targetBTU) < 1000);
+    return exact || null;
+  }
+
+  // Nearest strategy
+  if (availableGasBTUs.length === 0) return null;
+  
+  let nearest = availableGasBTUs[0];
+  let minDiff = Math.abs(nearest.value - targetBTU);
+  
+  for (const btu of availableGasBTUs) {
+    const diff = Math.abs(btu.value - targetBTU);
+    if (diff < minDiff) {
+      minDiff = diff;
+      nearest = btu;
+    }
+  }
+  
+  return nearest;
+}
+
+// Find nearest electric kW code
+export function findNearestElectricKWCode(
+  targetKW: number,
+  strategy: 'nearest' | 'exact' = 'nearest'
+): { code: string; value: number } | null {
+  const availableElectricKWs = Object.entries(POSITION_MAPPINGS.p9_p11_electric)
+    .filter(([code]) => code !== 'XXX') // Exclude "no heat" option
+    .map(([code, value]) => ({ code, value }))
+    .sort((a, b) => a.value - b.value);
+
+  if (strategy === 'exact') {
+    const exact = availableElectricKWs.find(kw => Math.abs(kw.value - targetKW) < 0.5);
+    return exact || null;
+  }
+
+  // Nearest strategy
+  if (availableElectricKWs.length === 0) return null;
+  
+  let nearest = availableElectricKWs[0];
+  let minDiff = Math.abs(nearest.value - targetKW);
+  
+  for (const kw of availableElectricKWs) {
+    const diff = Math.abs(kw.value - targetKW);
+    if (diff < minDiff) {
+      minDiff = diff;
+      nearest = kw;
+    }
+  }
+  
+  return nearest;
+}
+
+// Determine family key from application and efficiency
+export function determineFamilyKey(
+  application: 'C' | 'G' | 'H', 
+  efficiency: 'S' | 'H',
+  capacityTons?: number
+): DaikinFamilyKeys | null {
+  if (application === 'C') {
+    return efficiency === 'S' ? 'DSC' : 'DHC';
+  } else if (application === 'G') {
+    return efficiency === 'S' ? 'DSG' : 'DHG';
+  } else if (application === 'H') {
+    if (efficiency === 'H') {
+      return 'DHH';
+    } else {
+      // Standard heat pump - choose based on capacity
+      if (capacityTons && capacityTons >= 7.5) {
+        return 'DSH_7p5to10';
+      } else {
+        return 'DSH_3to6';
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Validate family compatibility with specifications
+export function validateFamilySpecifications(
+  familyKey: DaikinFamilyKeys,
+  capacityCode: string,
+  controlsCode: string,
+  gasBtuCode?: string
+): { isValid: boolean; errors: string[] } {
+  const family = FAMILY_DEFINITIONS[familyKey];
+  if (!family) {
+    return { isValid: false, errors: [`Unknown family: ${familyKey}`] };
+  }
+
+  const errors: string[] = [];
+
+  // Check capacity compatibility
+  if (!family.capacity_allowed.includes(capacityCode)) {
+    errors.push(`Capacity ${capacityCode} not allowed for family ${familyKey}`);
+  }
+
+  // Check controls compatibility
+  if (!family.controls_allowed.includes(controlsCode)) {
+    errors.push(`Controls ${controlsCode} not allowed for family ${familyKey}`);
+  }
+
+  // Check gas BTU requirement
+  if (family.requires_gas_btu && !gasBtuCode) {
+    errors.push(`Family ${familyKey} requires gas BTU specification`);
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+

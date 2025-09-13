@@ -69,6 +69,7 @@ export default function HVACDecoder() {
 
   const handleSpecSearchSubmit = (params: SpecSearchInput) => {
     setSpecSearchParams(params);
+    // Send SpecSearchInput directly to backend - no transformation needed
     specSearchMutation.mutate(params);
   };
 
