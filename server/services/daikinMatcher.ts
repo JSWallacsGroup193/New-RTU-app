@@ -728,6 +728,7 @@ export class DaikinMatcher {
 
   /**
    * Search with strict exact matching and return structured results
+   * Neighbors are constrained to ±1 tonnage variations within the same family as direct matches
    */
   public searchWithStrictMatching(searchInput: SpecSearchInput): {
     direct: DaikinUnitSpec[];
@@ -739,7 +740,18 @@ export class DaikinMatcher {
         this.strictExactMatch(unit, searchInput)
       );
 
-      // Find neighboring tonnages for alternatives
+      // If no direct matches, return empty neighbors
+      if (exactMatches.length === 0) {
+        return {
+          direct: [],
+          neighbors: { smaller: [], larger: [] }
+        };
+      }
+
+      // Get unique families from direct matches to constrain neighbors
+      const directMatchFamilies = new Set(exactMatches.map(unit => this.extractProductFamily(unit)));
+
+      // Find neighboring tonnages (±1 only)
       const currentTonnage = parseFloat(searchInput.tonnage);
       const availableTonnages = NOMINAL_TONNAGES
         .map(t => parseFloat(t.tonnage))
@@ -749,22 +761,26 @@ export class DaikinMatcher {
       const smallerTonnage = currentIndex > 0 ? availableTonnages[currentIndex - 1].toString() as Tonnage : null;
       const largerTonnage = currentIndex < availableTonnages.length - 1 ? availableTonnages[currentIndex + 1].toString() as Tonnage : null;
 
-      // Search for smaller alternatives
+      // Search for smaller alternatives within same families only
       const smallerAlternatives: DaikinUnitSpec[] = [];
       if (smallerTonnage) {
         const smallerCriteria = { ...searchInput, tonnage: smallerTonnage };
-        smallerAlternatives.push(...DAIKIN_R32_CATALOG.filter(unit => 
-          this.strictExactMatch(unit, smallerCriteria)
-        ));
+        const potentialSmallerUnits = DAIKIN_R32_CATALOG.filter(unit => 
+          this.strictExactMatch(unit, smallerCriteria) &&
+          directMatchFamilies.has(this.extractProductFamily(unit))
+        );
+        smallerAlternatives.push(...potentialSmallerUnits);
       }
 
-      // Search for larger alternatives
+      // Search for larger alternatives within same families only
       const largerAlternatives: DaikinUnitSpec[] = [];
       if (largerTonnage) {
         const largerCriteria = { ...searchInput, tonnage: largerTonnage };
-        largerAlternatives.push(...DAIKIN_R32_CATALOG.filter(unit => 
-          this.strictExactMatch(unit, largerCriteria)
-        ));
+        const potentialLargerUnits = DAIKIN_R32_CATALOG.filter(unit => 
+          this.strictExactMatch(unit, largerCriteria) &&
+          directMatchFamilies.has(this.extractProductFamily(unit))
+        );
+        largerAlternatives.push(...potentialLargerUnits);
       }
 
       return {
@@ -1193,19 +1209,22 @@ export class DaikinMatcher {
   }
 
   /**
+   * Extract product family identifier from model number
+   */
+  private extractProductFamily(unit: DaikinUnitSpec): string {
+    // Extract family code from model number (e.g., "DZ17SA" from "DZ17SA0361A")
+    const match = unit.modelNumber.match(/^([A-Z]{2}\d{2}[A-Z]{2})/);
+    const familyCode = match ? match[1] : unit.modelNumber.substring(0, 6);
+    
+    // Include voltage and phases to ensure complete family constraint
+    return `${familyCode}-${unit.voltage}-${unit.phases}`;
+  }
+
+  /**
    * Check if two units are from the same product family
    */
   private isSameProductFamily(unit1: DaikinUnitSpec, unit2: DaikinUnitSpec): boolean {
-    // Extract family code from model number (e.g., "DZ17SA" from "DZ17SA0361A")
-    const getFamily = (modelNumber: string) => {
-      const match = modelNumber.match(/^([A-Z]{2}\d{2}[A-Z]{2})/);
-      return match ? match[1] : modelNumber.substring(0, 6);
-    };
-    
-    const family1 = getFamily(unit1.modelNumber);
-    const family2 = getFamily(unit2.modelNumber);
-    
-    return family1 === family2 && unit1.voltage === unit2.voltage && unit1.phases === unit2.phases;
+    return this.extractProductFamily(unit1) === this.extractProductFamily(unit2);
   }
 
   // ============================================================================
