@@ -728,7 +728,7 @@ export const generateDaikinUnitCatalog = (): DaikinUnitSpec[] => {
           // Technical specifications
           refrigerant: "R-32",
           driveType: family.driveType.includes("ECM") || family.driveType.includes("EEM") ? "Variable Speed" as any : 
-                     family.compressorType === "Two Stage" || family.compressorType.includes?.("Two Stage") ? "Two-Stage" as any :
+                     family.compressorType === "Two Stage" || (typeof family.compressorType === "string" && family.compressorType.includes("Two Stage")) ? "Two-Stage" as any :
                      "Fixed Speed" as any,
           coolingStages: family.compressorType === "Two Stage" || tonnageFloat >= 6 ? 2 : 1,
           heatingStages: family.systemType === "Heat Pump" ? 2 : undefined,

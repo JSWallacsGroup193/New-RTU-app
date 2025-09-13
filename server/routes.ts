@@ -67,8 +67,62 @@ const enhancedDecodeRequestSchema = z.object({
 // Use the enhanced specification search schema from shared schema
 const specSearchRequestSchema = specSearchInputSchema;
 
+// Helper function to convert ParsedModel to SpecSearchInput for strict matching
+function convertParsedModelToSearchInput(
+  parsedModel: any, 
+  efficiencyPreference?: { preferredLevel?: "standard" | "high"; energySavings?: boolean; }
+): any[] {
+  // Convert BTU capacity to tonnage
+  const tonnageValue = (parsedModel.btuCapacity / 12000).toFixed(1);
+  
+  // Map voltage to enum format
+  const voltageMapping: Record<string, string> = {
+    "208/230": "208-230",
+    "230": "208-230",
+    "460": "460",
+    "575": "575"
+  };
+  const voltage = voltageMapping[parsedModel.voltage] || parsedModel.voltage;
+  
+  // Get efficiency preference
+  const efficiency = efficiencyPreference?.preferredLevel || "standard";
+  
+  // Create base search criteria
+  const baseCriteria = {
+    tonnage: tonnageValue,
+    voltage,
+    phases: parsedModel.phases,
+    efficiency
+  };
+  
+  // Generate search inputs for each system type
+  const systemTypes = ["Heat Pump", "Gas/Electric", "Straight A/C"];
+  const searchInputs = [];
+  
+  for (const systemType of systemTypes) {
+    const searchInput: any = {
+      systemType,
+      ...baseCriteria
+    };
+    
+    // Add conditional fields based on system type and original model
+    if (systemType === "Gas/Electric" && parsedModel.heatingBTU) {
+      searchInput.heatingBTU = parsedModel.heatingBTU;
+      searchInput.gasCategory = parsedModel.gasCategory || "Natural Gas";
+    }
+    
+    if (systemType === "Heat Pump" && parsedModel.heatKitKW) {
+      searchInput.heatKitKW = parsedModel.heatKitKW;
+    }
+    
+    searchInputs.push(searchInput);
+  }
+  
+  return searchInputs;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Model decoding endpoint
+  // Model decoding endpoint (UPDATED FOR STRICT MATCHING)
   app.post("/api/decode", async (req, res) => {
     try {
       // Validate request
@@ -98,17 +152,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!replacements) {
-        // Find Daikin replacements with efficiency preferences
-        replacements = matcher.findReplacements(parsedModel, efficiencyPreference);
+        // Convert parsed model to search inputs for strict matching
+        const searchInputs = convertParsedModelToSearchInput(parsedModel, efficiencyPreference);
+        
+        const allDirectMatches: any[] = [];
+        const allNeighborMatches: any[] = [];
+        
+        // Search each system type with strict matching
+        for (const searchInput of searchInputs) {
+          const strictResults = matcher.searchWithStrictMatching(searchInput);
+          
+          // Convert direct matches to legacy replacement format
+          for (const unit of strictResults.direct) {
+            allDirectMatches.push({
+              id: unit.id,
+              modelNumber: unit.modelNumber,
+              systemType: unit.systemType,
+              btuCapacity: unit.btuCapacity,
+              voltage: unit.voltage,
+              phases: unit.phases,
+              specifications: [
+                { label: "SEER Rating", value: unit.seerRating.toString(), unit: "BTU/Wh" },
+                { label: "Sound Level", value: unit.soundLevel.toString(), unit: "dB" },
+                { label: "Refrigerant", value: unit.refrigerant },
+                { label: "Drive Type", value: unit.driveType },
+                { label: "Cooling Stages", value: unit.coolingStages.toString() },
+                ...(unit.heatingStages ? [{ label: "Heating Stages", value: unit.heatingStages.toString() }] : []),
+                ...(unit.hspfRating ? [{ label: "HSPF Rating", value: unit.hspfRating.toString() }] : []),
+                ...(unit.heatingBTU ? [{ label: "Heating BTU", value: unit.heatingBTU.toString(), unit: "BTU/hr" }] : []),
+                ...(unit.heatKitKW ? [{ label: "Heat Kit", value: unit.heatKitKW.toString(), unit: "kW" }] : []),
+                { label: "Warranty", value: unit.warranty.toString(), unit: "years" },
+                { label: "Weight", value: unit.weight.toString(), unit: "lbs" },
+                { label: "Dimensions", value: `${unit.dimensions.length}"L x ${unit.dimensions.width}"W x ${unit.dimensions.height}"H` }
+              ],
+              sizeMatch: "direct"
+            });
+          }
+          
+          // Convert neighbor matches (smaller/larger) to legacy format  
+          for (const unit of [...strictResults.neighbors.smaller, ...strictResults.neighbors.larger]) {
+            const matchType = strictResults.neighbors.smaller.includes(unit) ? "smaller" : "larger";
+            allNeighborMatches.push({
+              id: unit.id,
+              modelNumber: unit.modelNumber,
+              systemType: unit.systemType,
+              btuCapacity: unit.btuCapacity,
+              voltage: unit.voltage,
+              phases: unit.phases,
+              specifications: [
+                { label: "SEER Rating", value: unit.seerRating.toString(), unit: "BTU/Wh" },
+                { label: "Sound Level", value: unit.soundLevel.toString(), unit: "dB" },
+                { label: "Refrigerant", value: unit.refrigerant },
+                { label: "Drive Type", value: unit.driveType },
+                { label: "Cooling Stages", value: unit.coolingStages.toString() },
+                ...(unit.heatingStages ? [{ label: "Heating Stages", value: unit.heatingStages.toString() }] : []),
+                ...(unit.hspfRating ? [{ label: "HSPF Rating", value: unit.hspfRating.toString() }] : []),
+                ...(unit.heatingBTU ? [{ label: "Heating BTU", value: unit.heatingBTU.toString(), unit: "BTU/hr" }] : []),
+                ...(unit.heatKitKW ? [{ label: "Heat Kit", value: unit.heatKitKW.toString(), unit: "kW" }] : []),
+                { label: "Warranty", value: unit.warranty.toString(), unit: "years" },
+                { label: "Weight", value: unit.weight.toString(), unit: "lbs" },
+                { label: "Dimensions", value: `${unit.dimensions.length}"L x ${unit.dimensions.width}"W x ${unit.dimensions.height}"H` },
+                { label: "Alternative", value: `${matchType} capacity option`, unit: "sizing" }
+              ],
+              sizeMatch: matchType
+            });
+          }
+        }
+        
+        // Combine results: prioritize direct matches, then neighbors
+        replacements = [...allDirectMatches, ...allNeighborMatches];
+        
+        // Remove duplicates based on modelNumber
+        const uniqueReplacements = replacements.filter((replacement, index, self) => 
+          index === self.findIndex(r => r.modelNumber === replacement.modelNumber)
+        );
+        
+        replacements = uniqueReplacements;
         
         // Cache the replacements with the specific cache key
         await storage.cacheReplacements(cacheKey, replacements);
       }
       
-      // Build response
+      // Check if we have any results
+      if (replacements.length === 0) {
+        return res.status(404).json({
+          error: "No compatible Daikin units found",
+          message: `No Daikin R-32 units match the specifications for "${modelNumber}". Consider adjusting the efficiency preference or contact technical support for alternatives.`,
+          originalUnit: parsedModel,
+          replacements: []
+        });
+      }
+      
+      // Build response with match quality indicators
+      const directMatches = replacements.filter(r => r.matchType === "direct");
       const response = {
         originalUnit: parsedModel,
-        replacements: replacements
+        replacements: replacements,
+        matchSummary: {
+          totalResults: replacements.length,
+          exactMatches: directMatches.length,
+          hasDirectMatch: directMatches.length > 0,
+          matchTypes: [...new Set(replacements.map(r => r.matchType))]
+        }
       };
       
       // Validate response before sending
@@ -120,38 +265,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Enhanced specification-based search endpoint
+  // Enhanced specification-based search endpoint (UPDATED FOR STRICT MATCHING)
   app.post("/api/search-specs", async (req, res) => {
     try {
       // Validate request with enhanced schema
       const searchInput = specSearchRequestSchema.parse(req.body);
       
-      // Convert tonnage to BTU range for the search
-      const tonnageToBTU = {
-        "1.5": 18000, "2.0": 24000, "2.5": 30000, "3.0": 36000, "3.5": 42000,
-        "4.0": 48000, "5.0": 60000, "6.0": 72000, "7.5": 90000, "8.5": 102000,
-        "10.0": 120000, "12.5": 150000, "15.0": 180000, "20.0": 240000, "25.0": 300000
-      };
+      // Use strict matching to get structured results
+      const strictResults = matcher.searchWithStrictMatching(searchInput);
       
-      const targetBTU = tonnageToBTU[searchInput.tonnage as keyof typeof tonnageToBTU];
-      if (!targetBTU) {
-        return res.status(400).json({
-          error: "Invalid tonnage",
-          message: "Unsupported tonnage value"
-        });
-      }
-      
-      // Create BTU range (±10% for flexibility)
-      const btuRange = {
-        min: Math.floor(targetBTU * 0.9),
-        max: Math.ceil(targetBTU * 1.1)
-      };
-      
-      // Search Daikin units using enhanced specification input
-      const daikinUnits = matcher.searchBySpecInput(searchInput);
-      
-      // Transform DaikinUnitSpec objects to match specSearchResponseSchema
-      const transformedResults = daikinUnits.map(unit => ({
+      // Transform unit specification helper function
+      const transformUnit = (unit: any) => ({
         id: unit.id,
         modelNumber: unit.modelNumber,
         systemType: unit.systemType,
@@ -172,16 +296,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { label: "Weight", value: unit.weight.toString(), unit: "lbs" },
           { label: "Dimensions", value: `${unit.dimensions.length}"L x ${unit.dimensions.width}"W x ${unit.dimensions.height}"H` }
         ]
-      }));
+      });
       
+      // Handle case where no exact matches are found
+      if (strictResults.direct.length === 0) {
+        const hasAlternatives = strictResults.neighbors.smaller.length > 0 || strictResults.neighbors.larger.length > 0;
+        
+        if (!hasAlternatives) {
+          return res.status(404).json({
+            error: "No matching Daikin units found",
+            message: `No Daikin R-32 units match the exact specifications: ${searchInput.systemType}, ${searchInput.tonnage}T, ${searchInput.voltage}V, ${searchInput.phases}-phase${searchInput.efficiency === "high" ? ", high efficiency" : ""}${searchInput.heatingBTU ? `, ${searchInput.heatingBTU} BTU heating` : ""}${searchInput.heatKitKW ? `, ${searchInput.heatKitKW}kW heat kit` : ""}. Try adjusting the specifications or contact technical support.`,
+            direct: [],
+            neighbors: { smaller: [], larger: [] },
+            searchCriteria: searchInput
+          });
+        }
+      }
+      
+      // Build structured response with direct matches and neighbors
       const response = {
-        results: transformedResults,
-        count: transformedResults.length
+        direct: strictResults.direct.map(transformUnit),
+        neighbors: {
+          smaller: strictResults.neighbors.smaller.map(transformUnit),
+          larger: strictResults.neighbors.larger.map(transformUnit)
+        },
+        searchSummary: {
+          exactMatchesFound: strictResults.direct.length,
+          smallerAlternatives: strictResults.neighbors.smaller.length,
+          largerAlternatives: strictResults.neighbors.larger.length,
+          totalResults: strictResults.direct.length + strictResults.neighbors.smaller.length + strictResults.neighbors.larger.length,
+          searchCriteria: {
+            systemType: searchInput.systemType,
+            tonnage: searchInput.tonnage,
+            voltage: searchInput.voltage,
+            phases: searchInput.phases,
+            efficiency: searchInput.efficiency,
+            ...(searchInput.heatingBTU && { heatingBTU: searchInput.heatingBTU }),
+            ...(searchInput.heatKitKW && { heatKitKW: searchInput.heatKitKW }),
+            ...(searchInput.gasCategory && { gasCategory: searchInput.gasCategory })
+          }
+        }
       };
       
-      // Validate response before sending
-      const validatedResponse = specSearchResponseSchema.parse(response);
-      res.json(validatedResponse);
+      res.json(response);
       
     } catch (error) {
       return handleError(res, error, "searching specifications", "Invalid search parameters");

@@ -619,6 +619,189 @@ export class DaikinMatcher {
   }
 
   // ============================================================================
+  // STRICT EXACT-MATCH LOGIC METHODS
+  // ============================================================================
+
+  /**
+   * Strict exact match validation for all criteria
+   * Returns null if not exact match, no fallbacks
+   */
+  public strictExactMatch(unit: DaikinUnitSpec, criteria: SpecSearchInput): boolean {
+    // Exact system type match
+    if (unit.systemType !== criteria.systemType) return false;
+    
+    // Exact tonnage match
+    if (unit.tonnage !== criteria.tonnage) return false;
+    
+    // Exact voltage match
+    if (unit.voltage !== criteria.voltage) return false;
+    
+    // Exact phases match
+    if (unit.phases !== criteria.phases) return false;
+    
+    // Efficiency level exact match (based on SEER rating)
+    const isHighEfficiency = unit.seerRating >= 18;
+    const expectedHighEfficiency = criteria.efficiency === "high";
+    if (isHighEfficiency !== expectedHighEfficiency) return false;
+    
+    // Conditional exact matches based on system type
+    if (criteria.systemType === "Gas/Electric") {
+      // For Gas/Electric systems, heatingBTU must match exactly
+      if (!criteria.heatingBTU) return false; // Required field
+      if (!unit.heatingBTU || Math.abs(unit.heatingBTU - criteria.heatingBTU) > 1) return false;
+      
+      // Gas category must match if specified
+      if (criteria.gasCategory && unit.gasCategory !== criteria.gasCategory) return false;
+    }
+    
+    if (criteria.systemType === "Heat Pump" && criteria.heatKitKW) {
+      // For Heat Pumps with heat kit, must match exactly
+      if (!unit.heatKitKW || Math.abs(unit.heatKitKW - criteria.heatKitKW) > 0.1) return false;
+    }
+    
+    // Optional strict filters
+    if (criteria.maxSoundLevel && unit.soundLevel > criteria.maxSoundLevel) return false;
+    if (criteria.refrigerant && unit.refrigerant !== criteria.refrigerant) return false;
+    if (criteria.driveType && unit.driveType !== criteria.driveType) return false;
+    
+    return true;
+  }
+
+  /**
+   * Find strict exact match replacements for parsed model
+   * No tolerance, no fallbacks for "direct" replacements
+   */
+  public findStrictReplacements(
+    originalUnit: ParsedModel, 
+    efficiencyPreference?: { preferredLevel?: "standard" | "high"; energySavings?: boolean; }
+  ): { direct: Replacement | null; alternatives: Replacement[] } {
+    try {
+      // Convert parsed model to search criteria
+      const baseCriteria: Partial<SpecSearchInput> = {
+        tonnage: this.findNearestStandardTonnage(originalUnit.btuCapacity / 12000),
+        voltage: this.mapVoltageToEnum(originalUnit.voltage),
+        phases: originalUnit.phases as PhaseEnum,
+        efficiency: efficiencyPreference?.preferredLevel || "standard"
+      };
+
+      const systemTypes: SystemType[] = ["Heat Pump", "Gas/Electric", "Straight A/C"];
+      let directReplacement: Replacement | null = null;
+      const alternatives: Replacement[] = [];
+
+      for (const systemType of systemTypes) {
+        const searchCriteria: SpecSearchInput = {
+          systemType,
+          ...baseCriteria,
+          // Set conditional fields based on system type
+          ...(systemType === "Gas/Electric" && originalUnit.heatingBTU ? {
+            heatingBTU: originalUnit.heatingBTU,
+            gasCategory: originalUnit.gasCategory || "Natural Gas"
+          } : {}),
+          ...(systemType === "Heat Pump" && originalUnit.heatKitKW ? {
+            heatKitKW: originalUnit.heatKitKW
+          } : {})
+        } as SpecSearchInput;
+
+        // Find exact matches only
+        const exactMatches = DAIKIN_R32_CATALOG.filter(unit => 
+          this.strictExactMatch(unit, searchCriteria)
+        );
+
+        if (exactMatches.length > 0 && !directReplacement) {
+          // Take first exact match as direct replacement
+          directReplacement = this.createLegacyReplacement(exactMatches[0], "direct");
+        }
+
+        // Add all other exact matches as alternatives
+        for (const match of exactMatches.slice(1)) {
+          alternatives.push(this.createLegacyReplacement(match, "alternative"));
+        }
+      }
+
+      return { direct: directReplacement, alternatives };
+      
+    } catch (error) {
+      console.error("Error finding strict replacements:", error);
+      return { direct: null, alternatives: [] };
+    }
+  }
+
+  /**
+   * Search with strict exact matching and return structured results
+   */
+  public searchWithStrictMatching(searchInput: SpecSearchInput): {
+    direct: DaikinUnitSpec[];
+    neighbors: { smaller: DaikinUnitSpec[]; larger: DaikinUnitSpec[]; };
+  } {
+    try {
+      // Find exact matches
+      const exactMatches = DAIKIN_R32_CATALOG.filter(unit => 
+        this.strictExactMatch(unit, searchInput)
+      );
+
+      // Find neighboring tonnages for alternatives
+      const currentTonnage = parseFloat(searchInput.tonnage);
+      const availableTonnages = NOMINAL_TONNAGES
+        .map(t => parseFloat(t.tonnage))
+        .sort((a, b) => a - b);
+
+      const currentIndex = availableTonnages.indexOf(currentTonnage);
+      const smallerTonnage = currentIndex > 0 ? availableTonnages[currentIndex - 1].toString() as Tonnage : null;
+      const largerTonnage = currentIndex < availableTonnages.length - 1 ? availableTonnages[currentIndex + 1].toString() as Tonnage : null;
+
+      // Search for smaller alternatives
+      const smallerAlternatives: DaikinUnitSpec[] = [];
+      if (smallerTonnage) {
+        const smallerCriteria = { ...searchInput, tonnage: smallerTonnage };
+        smallerAlternatives.push(...DAIKIN_R32_CATALOG.filter(unit => 
+          this.strictExactMatch(unit, smallerCriteria)
+        ));
+      }
+
+      // Search for larger alternatives
+      const largerAlternatives: DaikinUnitSpec[] = [];
+      if (largerTonnage) {
+        const largerCriteria = { ...searchInput, tonnage: largerTonnage };
+        largerAlternatives.push(...DAIKIN_R32_CATALOG.filter(unit => 
+          this.strictExactMatch(unit, largerCriteria)
+        ));
+      }
+
+      return {
+        direct: exactMatches,
+        neighbors: {
+          smaller: smallerAlternatives,
+          larger: largerAlternatives
+        }
+      };
+      
+    } catch (error) {
+      console.error("Error in strict matching search:", error);
+      return { direct: [], neighbors: { smaller: [], larger: [] } };
+    }
+  }
+
+  /**
+   * Helper method to map voltage strings to enum values
+   */
+  private mapVoltageToEnum(voltage: string): VoltageEnum {
+    const normalizedVoltage = voltage.replace(/[^0-9-]/g, ''); // Remove non-digits and dashes
+    
+    if (normalizedVoltage.includes('208') || normalizedVoltage.includes('230')) {
+      return "208-230";
+    }
+    if (normalizedVoltage.includes('460')) {
+      return "460";
+    }
+    if (normalizedVoltage.includes('575')) {
+      return "575";
+    }
+    
+    // Default fallback
+    return "208-230";
+  }
+
+  // ============================================================================
   // LEGACY COMPATIBILITY METHODS (UPDATED)
   // ============================================================================
 
@@ -684,29 +867,13 @@ export class DaikinMatcher {
   }
 
   /**
-   * Search by specification input
+   * Search by specification input (UPDATED FOR STRICT EXACT MATCHING)
    */
   public searchBySpecInput(searchInput: SpecSearchInput): DaikinUnitSpec[] {
     try {
       return DAIKIN_R32_CATALOG.filter(unit => {
-        // System type match
-        if (unit.systemType !== searchInput.systemType) return false;
-        
-        // Tonnage match
-        if (unit.tonnage !== searchInput.tonnage) return false;
-        
-        // Voltage match
-        if (unit.voltage !== searchInput.voltage) return false;
-        
-        // Phase match
-        if (unit.phases !== searchInput.phases) return false;
-        
-        // Optional filters
-        if (searchInput.maxSoundLevel && unit.soundLevel > searchInput.maxSoundLevel) return false;
-        if (searchInput.refrigerant && unit.refrigerant !== searchInput.refrigerant) return false;
-        if (searchInput.driveType && unit.driveType !== searchInput.driveType) return false;
-        
-        return true;
+        // Use strict exact matching
+        return this.strictExactMatch(unit, searchInput);
       });
     } catch (error) {
       console.error("Error in searchBySpecInput:", error);
@@ -755,41 +922,50 @@ export class DaikinMatcher {
   // PUBLIC API METHODS (EXISTING)
 
   /**
-   * Find Daikin replacements for a parsed original unit
+   * Find Daikin replacements for a parsed original unit (UPDATED FOR STRICT MATCHING)
    */
   public findReplacements(originalUnit: ParsedModel, efficiencyPreference?: {
     preferredLevel?: "standard" | "high";
     energySavings?: boolean;
   }): Replacement[] {
     try {
-      const matchingOptions: MatchingOptions = {
-        targetCapacity: originalUnit.btuCapacity,
-        tolerance: 0.10 // 10% tolerance for direct matches
-      };
-
-      // Get sizing analysis for the original unit
-      const sizingAnalysis = this.analyzeBTUToTonnage(originalUnit.btuCapacity);
+      // Use strict exact matching for direct replacements
+      const strictResults = this.findStrictReplacements(originalUnit, efficiencyPreference);
       
-      // Find matches for each system type with smart ordering
-      const systemTypes: SystemType[] = ["Heat Pump", "Gas/Electric", "Straight A/C"];
       const allReplacements: Replacement[] = [];
+      
+      // Add direct match if found (guaranteed to be exact)
+      if (strictResults.direct) {
+        allReplacements.push(strictResults.direct);
+      }
+      
+      // Add exact alternatives
+      allReplacements.push(...strictResults.alternatives);
+      
+      // Only if no strict matches found, fall back to tolerance-based matching for alternatives only
+      if (allReplacements.length === 0) {
+        console.warn(`No exact matches found for model ${originalUnit.modelNumber}. Using tolerance-based alternatives.`);
+        
+        const matchingOptions: MatchingOptions = {
+          targetCapacity: originalUnit.btuCapacity,
+          tolerance: 0.10 // 10% tolerance for alternatives only
+        };
 
-      for (const systemType of systemTypes) {
-        const systemOptions = { ...matchingOptions, systemType };
-        const sizingResult = this.findOptimalSizing(systemOptions);
-        
-        // Add direct match
-        if (sizingResult.directMatch) {
-          allReplacements.push(this.createLegacyReplacement(sizingResult.directMatch, "direct"));
-        }
-        
-        // Add alternatives
-        if (sizingResult.smallerAlternative) {
-          allReplacements.push(this.createLegacyReplacement(sizingResult.smallerAlternative, "smaller"));
-        }
-        
-        if (sizingResult.largerAlternative) {
-          allReplacements.push(this.createLegacyReplacement(sizingResult.largerAlternative, "larger"));
+        // Find matches for each system type with tolerance
+        const systemTypes: SystemType[] = ["Heat Pump", "Gas/Electric", "Straight A/C"];
+
+        for (const systemType of systemTypes) {
+          const systemOptions = { ...matchingOptions, systemType };
+          const sizingResult = this.findOptimalSizing(systemOptions);
+          
+          // Add alternatives with clear indication they are not exact matches
+          if (sizingResult.smallerAlternative) {
+            allReplacements.push(this.createLegacyReplacement(sizingResult.smallerAlternative, "smaller"));
+          }
+          
+          if (sizingResult.largerAlternative) {
+            allReplacements.push(this.createLegacyReplacement(sizingResult.largerAlternative, "larger"));
+          }
         }
       }
 
