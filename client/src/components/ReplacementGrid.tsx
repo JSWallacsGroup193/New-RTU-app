@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import SpecificationCard from "./SpecificationCard";
-import { ArrowDown, ArrowUp, Equal, ExternalLink, Download, CheckSquare, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, Equal, ExternalLink, Download, CheckSquare, Square, Star, Zap, Leaf } from "lucide-react";
 
 interface DaikinReplacement {
   id: string;
@@ -55,6 +55,28 @@ export default function ReplacementGrid({
     }
   };
 
+  // Helper function to extract SEER rating from specifications
+  const getSEERRating = (specifications: Array<{label: string; value: string; unit?: string}>) => {
+    const seerSpec = specifications.find(spec => 
+      spec.label.toLowerCase().includes('seer')
+    );
+    return seerSpec ? parseFloat(seerSpec.value) : null;
+  };
+
+  // Helper function to get efficiency level badge
+  const getEfficiencyBadge = (seerRating: number | null) => {
+    if (!seerRating) return null;
+    
+    if (seerRating >= 19) {
+      return { level: "Premium", color: "bg-green-500 text-white", icon: Star };
+    } else if (seerRating >= 16) {
+      return { level: "High", color: "bg-blue-500 text-white", icon: Zap };
+    } else if (seerRating >= 13) {
+      return { level: "Standard", color: "bg-gray-500 text-white", icon: Leaf };
+    }
+    return null;
+  };
+
   const groupedReplacements = replacements.reduce((acc, replacement) => {
     if (!acc[replacement.sizeMatch]) {
       acc[replacement.sizeMatch] = [];
@@ -92,6 +114,8 @@ export default function ReplacementGrid({
                 <div className="space-y-4">
                   {matches.map((replacement) => {
                     const isSelected = selectedUnits.has(replacement.id);
+                    const seerRating = getSEERRating(replacement.specifications);
+                    const efficiencyBadge = getEfficiencyBadge(seerRating);
                     
                     return (
                       <Card 
@@ -119,12 +143,36 @@ export default function ReplacementGrid({
                               )}
                               
                               <div className="flex-1">
-                                <CardTitle className="text-primary text-base">
-                                  Daikin {replacement.modelNumber}
-                                </CardTitle>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <CardTitle className="text-primary text-base">
+                                    Daikin {replacement.modelNumber}
+                                  </CardTitle>
+                                  {seerRating && (
+                                    <Badge 
+                                      className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                      data-testid={`badge-seer-${replacement.id}`}
+                                    >
+                                      {seerRating} SEER
+                                    </Badge>
+                                  )}
+                                </div>
                                 <p className="text-sm text-muted-foreground">
                                   {replacement.btuCapacity.toLocaleString()} BTU/hr • {replacement.voltage}V
                                 </p>
+                                {efficiencyBadge && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    {(() => {
+                                      const IconComponent = efficiencyBadge.icon;
+                                      return <IconComponent className="h-3 w-3" />;
+                                    })()}
+                                    <Badge 
+                                      className={`text-xs ${efficiencyBadge.color}`}
+                                      data-testid={`badge-efficiency-${replacement.id}`}
+                                    >
+                                      {efficiencyBadge.level} Efficiency
+                                    </Badge>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             

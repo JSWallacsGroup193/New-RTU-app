@@ -1,13 +1,20 @@
 import { DecodeResponse, SpecSearchResponse, SpecSearchInput } from "@shared/schema";
 
 // Decode model number API call
-export const decodeModelNumber = async (modelNumber: string): Promise<DecodeResponse> => {
+export const decodeModelNumber = async (params: {
+  modelNumber: string;
+  efficiencyPreference?: {
+    minSEER?: number;
+    preferredLevel?: "standard" | "high" | "premium";
+    energySavings?: boolean;
+  };
+}): Promise<DecodeResponse> => {
   const response = await fetch("/api/decode", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ modelNumber }),
+    body: JSON.stringify(params),
   });
 
   if (!response.ok) {

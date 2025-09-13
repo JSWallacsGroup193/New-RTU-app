@@ -758,7 +758,11 @@ export class DaikinMatcher {
   /**
    * Find Daikin replacements for a parsed original unit
    */
-  public findReplacements(originalUnit: ParsedModel): Replacement[] {
+  public findReplacements(originalUnit: ParsedModel, efficiencyPreference?: {
+    minSEER?: number;
+    preferredLevel?: "standard" | "high" | "premium";
+    energySavings?: boolean;
+  }): Replacement[] {
     try {
       const matchingOptions: MatchingOptions = {
         targetCapacity: originalUnit.btuCapacity,
@@ -791,8 +795,14 @@ export class DaikinMatcher {
         }
       }
 
-      // Sort by system type preference and capacity proximity
-      return this.sortReplacementsByPreference(allReplacements, originalUnit.btuCapacity);
+      // Filter by efficiency preferences if provided
+      let filteredReplacements = allReplacements;
+      if (efficiencyPreference) {
+        filteredReplacements = this.filterByEfficiency(allReplacements, efficiencyPreference);
+      }
+
+      // Sort by system type preference, capacity proximity, and efficiency
+      return this.sortReplacementsByPreference(filteredReplacements, originalUnit.btuCapacity, efficiencyPreference);
       
     } catch (error) {
       console.error("Error finding replacements:", error);
@@ -1142,14 +1152,81 @@ export class DaikinMatcher {
   }
 
   /**
-   * Sort replacements by preference (system type and capacity proximity)
+   * Filter replacements by efficiency preferences
    */
-  private sortReplacementsByPreference(replacements: Replacement[], originalCapacity: number): Replacement[] {
+  private filterByEfficiency(replacements: Replacement[], efficiencyPreference: {
+    minSEER?: number;
+    preferredLevel?: "standard" | "high" | "premium";
+    energySavings?: boolean;
+  }): Replacement[] {
+    return replacements.filter(replacement => {
+      // Extract SEER rating from specifications
+      const seerSpec = replacement.specifications.find(spec => 
+        spec.label.toLowerCase().includes('seer')
+      );
+      const seerRating = seerSpec ? parseFloat(seerSpec.value) : 0;
+
+      // Filter by minimum SEER requirement
+      if (efficiencyPreference.minSEER && seerRating < efficiencyPreference.minSEER) {
+        return false;
+      }
+
+      // Filter by preferred efficiency level
+      if (efficiencyPreference.preferredLevel) {
+        const levelRanges = {
+          "standard": { min: 13, max: 15 },
+          "high": { min: 16, max: 18 },
+          "premium": { min: 19, max: 30 }
+        };
+        
+        const range = levelRanges[efficiencyPreference.preferredLevel];
+        if (seerRating < range.min || seerRating > range.max) {
+          return false;
+        }
+      }
+
+      // If energy savings is prioritized, prefer higher efficiency
+      if (efficiencyPreference.energySavings && seerRating < 16) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Sort replacements by preference (system type, capacity proximity, and efficiency)
+   */
+  private sortReplacementsByPreference(
+    replacements: Replacement[], 
+    originalCapacity: number,
+    efficiencyPreference?: {
+      minSEER?: number;
+      preferredLevel?: "standard" | "high" | "premium";
+      energySavings?: boolean;
+    }
+  ): Replacement[] {
     return replacements.sort((a, b) => {
       // First sort by system type preference
       const systemOrder = { "Heat Pump": 1, "Gas/Electric": 2, "Straight A/C": 3 };
       const systemDiff = (systemOrder[a.systemType] || 4) - (systemOrder[b.systemType] || 4);
       if (systemDiff !== 0) return systemDiff;
+      
+      // Then by efficiency if preference is set
+      if (efficiencyPreference?.energySavings || efficiencyPreference?.preferredLevel) {
+        const getSEER = (replacement: Replacement) => {
+          const seerSpec = replacement.specifications.find(spec => 
+            spec.label.toLowerCase().includes('seer')
+          );
+          return seerSpec ? parseFloat(seerSpec.value) : 0;
+        };
+        
+        const aSEER = getSEER(a);
+        const bSEER = getSEER(b);
+        
+        // Higher SEER is better (reverse order)
+        if (aSEER !== bSEER) return bSEER - aSEER;
+      }
       
       // Then by match type preference
       const matchOrder = { "direct": 1, "smaller": 2, "larger": 3 };

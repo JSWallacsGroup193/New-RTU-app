@@ -48,9 +48,13 @@ export default function HVACDecoder() {
     },
   });
 
-  const handleSearch = async (modelNumber: string) => {
-    console.log("Searching for model:", modelNumber);
-    decodeMutation.mutate(modelNumber);
+  const handleSearch = async (modelNumber: string, efficiencyPreference?: {
+    minSEER?: number;
+    preferredLevel?: "standard" | "high" | "premium";
+    energySavings?: boolean;
+  }) => {
+    console.log("Searching for model:", modelNumber, "with efficiency preference:", efficiencyPreference);
+    decodeMutation.mutate({ modelNumber, efficiencyPreference });
   };
 
   const handleNewSearch = () => {

@@ -43,7 +43,12 @@ const matcher = new DaikinMatcher();
 
 // Request validation schemas
 const decodeRequestSchema = z.object({
-  modelNumber: z.string().min(3).max(50).trim()
+  modelNumber: z.string().min(3).max(50).trim(),
+  efficiencyPreference: z.object({
+    minSEER: z.number().optional(),
+    preferredLevel: z.enum(["standard", "high", "premium"]).optional(),
+    energySavings: z.boolean().optional()
+  }).optional()
 });
 
 // Enhanced decode request with options
@@ -68,11 +73,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/decode", async (req, res) => {
     try {
       // Validate request
-      const { modelNumber } = decodeRequestSchema.parse(req.body);
+      const { modelNumber, efficiencyPreference } = decodeRequestSchema.parse(req.body);
       
-      // Check cache first
+      // Check cache first - include efficiency preferences in cache key for specificity
+      const cacheKey = efficiencyPreference ? 
+        `${modelNumber}_eff_${JSON.stringify(efficiencyPreference)}` : 
+        modelNumber;
+      
       let parsedModel = await storage.getCachedModel(modelNumber);
-      let replacements = await storage.getCachedReplacements(modelNumber);
+      let replacements = await storage.getCachedReplacements(cacheKey);
       
       if (!parsedModel) {
         // Parse the model number
@@ -90,11 +99,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!replacements) {
-        // Find Daikin replacements
-        replacements = matcher.findReplacements(parsedModel);
+        // Find Daikin replacements with efficiency preferences
+        replacements = matcher.findReplacements(parsedModel, efficiencyPreference);
         
-        // Cache the replacements
-        await storage.cacheReplacements(modelNumber, replacements);
+        // Cache the replacements with the specific cache key
+        await storage.cacheReplacements(cacheKey, replacements);
       }
       
       // Build response
