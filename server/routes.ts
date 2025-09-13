@@ -27,6 +27,15 @@ import {
   projectDetailResponseSchema
 } from "@shared/schema";
 import { z } from "zod";
+import {
+  handleError,
+  handleValidationError,
+  handleNotFoundError,
+  handleConflictError,
+  handleCapacityError,
+  handleInternalError,
+  validateRequestBody
+} from "./utils/errorHandlers";
 
 // Initialize services
 const parser = new HVACModelParser();
@@ -99,19 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(validatedResponse);
       
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          error: "Validation error",
-          message: "Invalid request format",
-          details: error.errors
-        });
-      }
-      
-      console.error("Decode error:", error);
-      res.status(500).json({
-        error: "Internal server error",
-        message: "An error occurred while processing your request"
-      });
+      return handleError(res, error, "processing model decode request", "Invalid request format");
     }
   });
 
@@ -179,19 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(validatedResponse);
       
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          error: "Validation error", 
-          message: "Invalid search parameters",
-          details: error.errors
-        });
-      }
-      
-      console.error("Enhanced spec search error:", error);
-      res.status(500).json({
-        error: "Internal server error",
-        message: "An error occurred while searching specifications"
-      });
+      return handleError(res, error, "searching specifications", "Invalid search parameters");
     }
   });
 
@@ -984,40 +969,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add unit to project
   app.post("/api/projects/:projectId/units", async (req, res) => {
     try {
+      // Validate request body
+      const validation = validateRequestBody(addUnitToProjectRequestSchema, req.body);
+      if (!validation.success) {
+        return handleValidationError(res, validation.error, "Invalid unit data");
+      }
+
       // Check project capacity first
       const canAdd = await storage.canAddUnitsToProject(req.params.projectId, 1);
       if (!canAdd) {
-        return res.status(400).json({
-          error: "Project capacity exceeded",
-          message: "This project has reached the maximum limit of 20 units"
-        });
+        return handleCapacityError(res, 20);
       }
       
       const unitData = {
         projectId: req.params.projectId,
-        originalModelNumber: req.body.originalUnit.modelNumber,
-        originalManufacturer: req.body.originalUnit.manufacturer,
-        chosenReplacementId: req.body.chosenReplacement.id,
-        chosenReplacementModel: req.body.chosenReplacement.modelNumber,
-        configuration: req.body.configuration || {},
-        notes: req.body.notes || "",
+        originalModelNumber: validation.data.originalUnit.modelNumber,
+        originalManufacturer: validation.data.originalUnit.manufacturer,
+        chosenReplacementId: validation.data.chosenReplacement.id,
+        chosenReplacementModel: validation.data.chosenReplacement.modelNumber,
+        configuration: validation.data.configuration || {},
+        notes: validation.data.notes || "",
         status: "pending" as const
       };
       
       const projectUnit = await storage.addUnitToProject(unitData);
       res.status(201).json(projectUnit);
     } catch (error) {
-      if (error instanceof Error && error.message.includes("maximum limit")) {
-        return res.status(400).json({
-          error: "Project capacity exceeded",
-          message: error.message
-        });
-      }
-      console.error("Add unit to project error:", error);
-      res.status(500).json({
-        error: "Internal server error",
-        message: "An error occurred while adding the unit to the project"
-      });
+      return handleError(res, error, "adding unit to project");
     }
   });
 

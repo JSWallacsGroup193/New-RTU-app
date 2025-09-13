@@ -1052,3 +1052,67 @@ export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
 export type AddUnitToProjectRequest = z.infer<typeof addUnitToProjectRequestSchema>;
 export type ProjectListResponse = z.infer<typeof projectListResponseSchema>;
 export type ProjectDetailResponse = z.infer<typeof projectDetailResponseSchema>;
+
+// ============================================================================
+// STANDARDIZED ERROR RESPONSE SCHEMAS
+// ============================================================================
+
+// Standard error response structure
+export const errorResponseSchema = z.object({
+  error: z.string(), // Error type/category
+  message: z.string(), // Human-readable error message
+  code: z.string().optional(), // Machine-readable error code
+  details: z.any().optional(), // Additional error details (validation errors, etc.)
+  timestamp: z.string().optional(), // ISO timestamp of error
+  requestId: z.string().optional() // Request tracking ID
+});
+
+export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+
+// Specific error types
+export const validationErrorResponseSchema = errorResponseSchema.extend({
+  error: z.literal("Validation error"),
+  code: z.literal("VALIDATION_FAILED"),
+  details: z.array(z.object({
+    path: z.array(z.union([z.string(), z.number()])),
+    message: z.string(),
+    code: z.string()
+  }))
+});
+
+export const notFoundErrorResponseSchema = errorResponseSchema.extend({
+  error: z.literal("Not found"),
+  code: z.literal("RESOURCE_NOT_FOUND")
+});
+
+export const conflictErrorResponseSchema = errorResponseSchema.extend({
+  error: z.literal("Conflict"),
+  code: z.literal("RESOURCE_CONFLICT")
+});
+
+export const capacityErrorResponseSchema = errorResponseSchema.extend({
+  error: z.literal("Project capacity exceeded"),
+  code: z.literal("PROJECT_CAPACITY_EXCEEDED")
+});
+
+export const internalErrorResponseSchema = errorResponseSchema.extend({
+  error: z.literal("Internal server error"),
+  code: z.literal("INTERNAL_SERVER_ERROR")
+});
+
+export type ValidationErrorResponse = z.infer<typeof validationErrorResponseSchema>;
+export type NotFoundErrorResponse = z.infer<typeof notFoundErrorResponseSchema>;
+export type ConflictErrorResponse = z.infer<typeof conflictErrorResponseSchema>;
+export type CapacityErrorResponse = z.infer<typeof capacityErrorResponseSchema>;
+export type InternalErrorResponse = z.infer<typeof internalErrorResponseSchema>;
+
+// Union of all possible error responses
+export const apiErrorResponseSchema = z.union([
+  validationErrorResponseSchema,
+  notFoundErrorResponseSchema,
+  conflictErrorResponseSchema,
+  capacityErrorResponseSchema,
+  internalErrorResponseSchema
+]);
+
+export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
