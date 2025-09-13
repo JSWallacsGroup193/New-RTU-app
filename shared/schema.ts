@@ -30,7 +30,7 @@ export type GasCategory = z.infer<typeof gasCategoryEnum>;
 // Size/Tonnage Options
 export const tonnageEnum = z.enum([
   "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "5.0", 
-  "6.0", "7.5", "10.0", "12.5", "15.0", "17.5", "20.0", "25.0"
+  "6.0", "7.5", "8.5", "10.0", "12.5", "15.0", "20.0", "25.0"
 ]);
 export type Tonnage = z.infer<typeof tonnageEnum>;
 

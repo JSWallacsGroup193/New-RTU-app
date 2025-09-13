@@ -116,8 +116,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Convert tonnage to BTU range for the search
       const tonnageToBTU = {
         "1.5": 18000, "2.0": 24000, "2.5": 30000, "3.0": 36000, "3.5": 42000,
-        "4.0": 48000, "5.0": 60000, "6.0": 72000, "7.5": 90000, "10.0": 120000,
-        "12.5": 150000, "15.0": 180000, "17.5": 210000, "20.0": 240000, "25.0": 300000
+        "4.0": 48000, "5.0": 60000, "6.0": 72000, "7.5": 90000, "8.5": 102000,
+        "10.0": 120000, "12.5": 150000, "15.0": 180000, "20.0": 240000, "25.0": 300000
       };
       
       const targetBTU = tonnageToBTU[searchInput.tonnage as keyof typeof tonnageToBTU];
@@ -183,6 +183,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "An error occurred while searching specifications"
+      });
+    }
+  });
+
+  // ============================================================================
+  // CATALOG VERIFICATION & STATS ENDPOINTS
+  // ============================================================================
+
+  // Daikin catalog statistics and verification endpoint
+  app.get("/api/daikin-catalog/stats", async (req, res) => {
+    try {
+      const { DAIKIN_R32_CATALOG } = await import("./data/daikinCatalog");
+      
+      // Analyze catalog completeness
+      const familyBreakdown = DAIKIN_R32_CATALOG.reduce((acc, unit) => {
+        const familyKey = unit.modelNumber.substring(0, 3); // DSC, DHC, DSG, etc.
+        if (!acc[familyKey]) {
+          acc[familyKey] = { count: 0, tonnages: new Set(), voltages: new Set(), driveTypes: new Set() };
+        }
+        acc[familyKey].count++;
+        acc[familyKey].tonnages.add(unit.tonnage);
+        acc[familyKey].voltages.add(unit.voltage);
+        acc[familyKey].driveTypes.add(unit.driveType);
+        return acc;
+      }, {} as Record<string, any>);
+
+      // Convert sets to arrays for JSON response
+      Object.keys(familyBreakdown).forEach(family => {
+        familyBreakdown[family].tonnages = Array.from(familyBreakdown[family].tonnages).sort();
+        familyBreakdown[family].voltages = Array.from(familyBreakdown[family].voltages).sort();
+        familyBreakdown[family].driveTypes = Array.from(familyBreakdown[family].driveTypes).sort();
+      });
+
+      // Check for schema compliance
+      const voltageIssues = DAIKIN_R32_CATALOG.filter(unit => 
+        !["208-230", "460", "575"].includes(unit.voltage)
+      );
+      
+      const driveTypeIssues = DAIKIN_R32_CATALOG.filter(unit => 
+        !["Fixed Speed", "Variable Speed", "Two-Stage"].includes(unit.driveType)
+      );
+
+      const systemTypeIssues = DAIKIN_R32_CATALOG.filter(unit => 
+        !["Heat Pump", "Gas/Electric", "Straight A/C"].includes(unit.systemType)
+      );
+
+      const response = {
+        total_units: DAIKIN_R32_CATALOG.length,
+        family_breakdown: familyBreakdown,
+        schema_compliance: {
+          voltage_issues: {
+            count: voltageIssues.length,
+            examples: voltageIssues.slice(0, 3).map(u => ({ id: u.id, voltage: u.voltage }))
+          },
+          drive_type_issues: {
+            count: driveTypeIssues.length,
+            examples: driveTypeIssues.slice(0, 3).map(u => ({ id: u.id, driveType: u.driveType }))
+          },
+          system_type_issues: {
+            count: systemTypeIssues.length,
+            examples: systemTypeIssues.slice(0, 3).map(u => ({ id: u.id, systemType: u.systemType }))
+          }
+        },
+        sample_units: DAIKIN_R32_CATALOG.slice(0, 5).map(unit => ({
+          id: unit.id,
+          modelNumber: unit.modelNumber,
+          systemType: unit.systemType,
+          tonnage: unit.tonnage,
+          voltage: unit.voltage,
+          phases: unit.phases,
+          driveType: unit.driveType
+        }))
+      };
+
+      res.json(response);
+    } catch (error) {
+      console.error("Catalog stats error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Unable to generate catalog statistics"
+      });
+    }
+  });
+
+  // Verification endpoint to test authentic family ID generation
+  app.get("/api/daikin-catalog/verify", async (req, res) => {
+    try {
+      const { DAIKIN_R32_CATALOG } = await import("./data/daikinCatalog");
+      
+      // Test that all IDs follow authentic pattern (not synthetic dz_*)
+      const authenticIDs = DAIKIN_R32_CATALOG.filter(unit => 
+        unit.id.match(/^(dsc|dhc|dsg|dhg|dsh|dhh)_\d+_\d+_\d+ph/)
+      );
+      
+      const syntheticIDs = DAIKIN_R32_CATALOG.filter(unit => 
+        unit.id.startsWith('dz_') || !unit.id.match(/^(dsc|dhc|dsg|dhg|dsh|dhh)_/)
+      );
+
+      // Test specification search with known valid parameters
+      const testSearch = {
+        systemType: "Straight A/C" as const,
+        tonnage: "5.0" as const,
+        voltage: "208-230" as const,
+        phases: "3" as const,
+        efficiency: "standard" as const
+      };
+
+      const searchResults = matcher.searchBySpecInput(testSearch);
+      
+      // Test voltage filtering works
+      const voltageTest = DAIKIN_R32_CATALOG.filter(unit => unit.voltage === "208-230");
+      const driveTypeTest = DAIKIN_R32_CATALOG.filter(unit => unit.driveType === "Variable Speed");
+
+      const response = {
+        catalog_verification: {
+          total_units: DAIKIN_R32_CATALOG.length,
+          authentic_ids: {
+            count: authenticIDs.length,
+            examples: authenticIDs.slice(0, 5).map(u => u.id)
+          },
+          synthetic_ids: {
+            count: syntheticIDs.length,
+            examples: syntheticIDs.slice(0, 3).map(u => u.id)
+          },
+          all_authentic: syntheticIDs.length === 0
+        },
+        family_presence: {
+          dsc_units: DAIKIN_R32_CATALOG.filter(u => u.id.startsWith('dsc_')).length,
+          dhc_units: DAIKIN_R32_CATALOG.filter(u => u.id.startsWith('dhc_')).length,
+          dsg_units: DAIKIN_R32_CATALOG.filter(u => u.id.startsWith('dsg_')).length,
+          dhg_units: DAIKIN_R32_CATALOG.filter(u => u.id.startsWith('dhg_')).length,
+          dsh_units: DAIKIN_R32_CATALOG.filter(u => u.id.startsWith('dsh_')).length,
+          dhh_units: DAIKIN_R32_CATALOG.filter(u => u.id.startsWith('dhh_')).length
+        },
+        specification_search: {
+          test_input: testSearch,
+          results_count: searchResults.length,
+          sample_results: searchResults.slice(0, 3).map(unit => ({
+            id: unit.id,
+            modelNumber: unit.modelNumber,
+            tonnage: unit.tonnage,
+            voltage: unit.voltage,
+            driveType: unit.driveType
+          }))
+        },
+        filtering_verification: {
+          voltage_208_230_count: voltageTest.length,
+          variable_speed_count: driveTypeTest.length,
+          sample_208_230_units: voltageTest.slice(0, 3).map(u => ({ id: u.id, voltage: u.voltage })),
+          sample_variable_speed_units: driveTypeTest.slice(0, 3).map(u => ({ id: u.id, driveType: u.driveType }))
+        }
+      };
+
+      res.json(response);
+    } catch (error) {
+      console.error("Catalog verification error:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Unable to verify catalog integrity"
       });
     }
   });
