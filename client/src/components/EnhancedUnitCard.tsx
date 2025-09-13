@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import EditableSpecificationForm from "./EditableSpecificationForm";
 import { 
   Thermometer, 
   Zap, 
@@ -20,9 +21,11 @@ import {
   ExternalLink,
   Plus,
   FileText,
-  Star
+  Star,
+  Edit2
 } from "lucide-react";
 import { useState } from "react";
+import { DaikinFamilyKeys } from "@shared/schema";
 
 // Factory-installed option interface
 interface FactoryOption {
@@ -97,6 +100,11 @@ interface EnhancedUnitCardProps {
   onViewDetails: (unit: EnhancedUnit) => void;
   onAddToProject?: (unit: EnhancedUnit) => void;
   onGenerateQuote?: (unit: EnhancedUnit) => void;
+  // Enhanced editable features
+  isEditable?: boolean;
+  family?: DaikinFamilyKeys;
+  onSpecificationUpdate?: (newModelNumber: string, specifications: any) => void;
+  onSave?: (formData: any) => void;
 }
 
 export default function EnhancedUnitCard({
@@ -105,10 +113,15 @@ export default function EnhancedUnitCard({
   onSelectionChange,
   onViewDetails,
   onAddToProject,
-  onGenerateQuote
+  onGenerateQuote,
+  isEditable = false,
+  family,
+  onSpecificationUpdate,
+  onSave
 }: EnhancedUnitCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState("specs");
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const sizeMatchConfig = {
     smaller: {
@@ -153,6 +166,57 @@ export default function EnhancedUnitCard({
     return acc;
   }, {} as Record<string, FieldAccessory[]>);
 
+  const handleToggleEdit = () => {
+    setIsEditMode(!isEditMode);
+  };
+
+  const handleSpecificationUpdate = (newModelNumber: string, specifications: any) => {
+    onSpecificationUpdate?.(newModelNumber, specifications);
+  };
+
+  const handleSave = (formData: any) => {
+    onSave?.(formData);
+    setIsEditMode(false);
+  };
+
+  const handleCancel = () => {
+    setIsEditMode(false);
+  };
+
+  // Convert unit data to the format expected by EditableSpecificationForm
+  const convertToSpecifications = () => {
+    return [
+      { label: "SEER Rating", value: unit.seerRating.toString() },
+      { label: "EER Rating", value: unit.eerRating?.toString() || "N/A" },
+      { label: "HSPF Rating", value: unit.hspfRating?.toString() || "N/A" },
+      { label: "Refrigerant", value: unit.refrigerant },
+      { label: "Sound Level", value: unit.soundLevel.toString(), unit: "dB" },
+      { label: "Operating Amperage", value: unit.operatingAmperage.toString(), unit: "A" },
+      { label: "Max Fuse Size", value: unit.maxFuseSize.toString(), unit: "A" },
+      { label: "Controls Type", value: unit.controlsType },
+      { label: "Coil Type", value: unit.coilType },
+    ];
+  };
+
+  // If editable and family is provided, and we're in edit mode, render the editable form
+  if (isEditable && family && isEditMode) {
+    return (
+      <EditableSpecificationForm
+        family={family}
+        modelNumber={unit.modelNumber}
+        systemType={unit.systemType}
+        btuCapacity={unit.btuCapacity}
+        voltage={unit.voltage}
+        phases={unit.phases}
+        specifications={convertToSpecifications()}
+        isOriginal={false}
+        onModelUpdate={handleSpecificationUpdate}
+        onSave={handleSave}
+        onCancel={handleCancel}
+      />
+    );
+  }
+
   return (
     <Card className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-primary shadow-lg' : 'hover-elevate'}`}>
       <CardHeader className="pb-3">
@@ -181,6 +245,17 @@ export default function EnhancedUnitCard({
               </div>
             </div>
           </div>
+          {isEditable && family && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={handleToggleEdit}
+              data-testid="button-edit-enhanced-specifications"
+              className="hover-elevate"
+            >
+              <Edit2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </CardHeader>
 

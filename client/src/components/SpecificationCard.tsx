@@ -1,7 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Thermometer, Zap, Gauge, Fan } from "lucide-react";
+import { Thermometer, Zap, Gauge, Fan, Edit2, Settings } from "lucide-react";
+import { useState } from "react";
+import EditableSpecificationForm from "./EditableSpecificationForm";
+import { DaikinFamilyKeys } from "@shared/schema";
 
 interface Specification {
   label: string;
@@ -18,6 +22,11 @@ interface SpecificationCardProps {
   phases: string;
   specifications: Specification[];
   isOriginal?: boolean;
+  // Enhanced editable features
+  isEditable?: boolean;
+  family?: DaikinFamilyKeys;
+  onSpecificationUpdate?: (newModelNumber: string, specifications: any) => void;
+  onSave?: (formData: any) => void;
 }
 
 export default function SpecificationCard({
@@ -28,14 +37,56 @@ export default function SpecificationCard({
   voltage,
   phases,
   specifications,
-  isOriginal = false
+  isOriginal = false,
+  isEditable = false,
+  family,
+  onSpecificationUpdate,
+  onSave
 }: SpecificationCardProps) {
+  const [isEditMode, setIsEditMode] = useState(false);
   const systemTypeColors = {
     "Heat Pump": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     "Gas/Electric": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200", 
     "Straight A/C": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
   };
 
+  const handleToggleEdit = () => {
+    setIsEditMode(!isEditMode);
+  };
+
+  const handleSpecificationUpdate = (newModelNumber: string, specifications: any) => {
+    onSpecificationUpdate?.(newModelNumber, specifications);
+  };
+
+  const handleSave = (formData: any) => {
+    onSave?.(formData);
+    setIsEditMode(false);
+  };
+
+  const handleCancel = () => {
+    setIsEditMode(false);
+  };
+
+  // If editable and family is provided, and we're in edit mode, render the editable form
+  if (isEditable && family && isEditMode) {
+    return (
+      <EditableSpecificationForm
+        family={family}
+        modelNumber={modelNumber}
+        systemType={systemType}
+        btuCapacity={btuCapacity}
+        voltage={voltage}
+        phases={phases}
+        specifications={specifications}
+        isOriginal={isOriginal}
+        onModelUpdate={handleSpecificationUpdate}
+        onSave={handleSave}
+        onCancel={handleCancel}
+      />
+    );
+  }
+
+  // Default read-only view
   return (
     <Card className={`w-full ${isOriginal ? 'border-muted-foreground/20' : 'border-primary/20'}`}>
       <CardHeader className="pb-3">
@@ -48,13 +99,26 @@ export default function SpecificationCard({
               {modelNumber}
             </p>
           </div>
-          <Badge 
-            data-testid={`badge-system-type-${systemType.replace(/[\/\s]/g, '-').toLowerCase()}`}
-            className={systemTypeColors[systemType]}
-            variant="secondary"
-          >
-            {systemType}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge 
+              data-testid={`badge-system-type-${systemType.replace(/[\/\s]/g, '-').toLowerCase()}`}
+              className={systemTypeColors[systemType]}
+              variant="secondary"
+            >
+              {systemType}
+            </Badge>
+            {isEditable && family && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleToggleEdit}
+                data-testid="button-edit-specifications"
+                className="hover-elevate"
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
