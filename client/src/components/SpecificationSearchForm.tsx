@@ -115,20 +115,50 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="1.5">1.5 Ton</SelectItem>
-                          <SelectItem value="2.0">2.0 Ton</SelectItem>
-                          <SelectItem value="2.5">2.5 Ton</SelectItem>
                           <SelectItem value="3.0">3.0 Ton</SelectItem>
                           <SelectItem value="3.5">3.5 Ton</SelectItem>
                           <SelectItem value="4.0">4.0 Ton</SelectItem>
+                          <SelectItem value="4.5">4.5 Ton</SelectItem>
                           <SelectItem value="5.0">5.0 Ton</SelectItem>
+                          <SelectItem value="5.5">5.5 Ton</SelectItem>
                           <SelectItem value="6.0">6.0 Ton</SelectItem>
+                          <SelectItem value="6.5">6.5 Ton</SelectItem>
+                          <SelectItem value="7.0">7.0 Ton</SelectItem>
                           <SelectItem value="7.5">7.5 Ton</SelectItem>
+                          <SelectItem value="8.0">8.0 Ton</SelectItem>
+                          <SelectItem value="8.5">8.5 Ton</SelectItem>
+                          <SelectItem value="9.0">9.0 Ton</SelectItem>
+                          <SelectItem value="9.5">9.5 Ton</SelectItem>
                           <SelectItem value="10.0">10.0 Ton</SelectItem>
+                          <SelectItem value="10.5">10.5 Ton</SelectItem>
+                          <SelectItem value="11.0">11.0 Ton</SelectItem>
+                          <SelectItem value="11.5">11.5 Ton</SelectItem>
+                          <SelectItem value="12.0">12.0 Ton</SelectItem>
                           <SelectItem value="12.5">12.5 Ton</SelectItem>
+                          <SelectItem value="13.0">13.0 Ton</SelectItem>
+                          <SelectItem value="13.5">13.5 Ton</SelectItem>
+                          <SelectItem value="14.0">14.0 Ton</SelectItem>
+                          <SelectItem value="14.5">14.5 Ton</SelectItem>
                           <SelectItem value="15.0">15.0 Ton</SelectItem>
+                          <SelectItem value="15.5">15.5 Ton</SelectItem>
+                          <SelectItem value="16.0">16.0 Ton</SelectItem>
+                          <SelectItem value="16.5">16.5 Ton</SelectItem>
+                          <SelectItem value="17.0">17.0 Ton</SelectItem>
                           <SelectItem value="17.5">17.5 Ton</SelectItem>
+                          <SelectItem value="18.0">18.0 Ton</SelectItem>
+                          <SelectItem value="18.5">18.5 Ton</SelectItem>
+                          <SelectItem value="19.0">19.0 Ton</SelectItem>
+                          <SelectItem value="19.5">19.5 Ton</SelectItem>
                           <SelectItem value="20.0">20.0 Ton</SelectItem>
+                          <SelectItem value="20.5">20.5 Ton</SelectItem>
+                          <SelectItem value="21.0">21.0 Ton</SelectItem>
+                          <SelectItem value="21.5">21.5 Ton</SelectItem>
+                          <SelectItem value="22.0">22.0 Ton</SelectItem>
+                          <SelectItem value="22.5">22.5 Ton</SelectItem>
+                          <SelectItem value="23.0">23.0 Ton</SelectItem>
+                          <SelectItem value="23.5">23.5 Ton</SelectItem>
+                          <SelectItem value="24.0">24.0 Ton</SelectItem>
+                          <SelectItem value="24.5">24.5 Ton</SelectItem>
                           <SelectItem value="25.0">25.0 Ton</SelectItem>
                         </SelectContent>
                       </Select>

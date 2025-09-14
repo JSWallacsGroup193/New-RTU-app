@@ -611,16 +611,37 @@ export class DaikinMatcher {
   }
 
   /**
-   * Find closest Daikin package unit tonnage with fuzzy matching
+   * Find closest Daikin package unit tonnage with proper sizing logic
+   * This is the core method that determines the "Direct" match
    */
   private findClosestDaikinTonnage(inputTonnage: number): number {
-    let closest = DAIKIN_PACKAGE_TONNAGES[0];
-    let minDiff = Math.abs(closest - inputTonnage);
+    if (DAIKIN_PACKAGE_TONNAGES.length === 0) {
+      throw new Error('No available Daikin tonnages defined');
+    }
+
+    // Sort tonnages to ensure proper comparison
+    const sortedTonnages = [...DAIKIN_PACKAGE_TONNAGES].sort((a, b) => a - b);
     
-    for (const tonnage of DAIKIN_PACKAGE_TONNAGES) {
-      const diff = Math.abs(tonnage - inputTonnage);
-      if (diff < minDiff) {
-        minDiff = diff;
+    // Handle edge cases
+    if (inputTonnage <= sortedTonnages[0]) {
+      return sortedTonnages[0]; // Return smallest if input is smaller than all available
+    }
+    if (inputTonnage >= sortedTonnages[sortedTonnages.length - 1]) {
+      return sortedTonnages[sortedTonnages.length - 1]; // Return largest if input is larger than all available
+    }
+
+    // Find the closest tonnage using distance-based matching
+    let closest = sortedTonnages[0];
+    let minDistance = Math.abs(closest - inputTonnage);
+    
+    for (const tonnage of sortedTonnages) {
+      const distance = Math.abs(tonnage - inputTonnage);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = tonnage;
+      }
+      // If distances are equal, prefer the larger tonnage (round up for ties)
+      else if (distance === minDistance && tonnage > closest) {
         closest = tonnage;
       }
     }
@@ -629,25 +650,155 @@ export class DaikinMatcher {
   }
 
   /**
-   * Get sizing options (direct, up, down) based on Daikin package tonnages
+   * Get comprehensive sizing options (direct, up, down) based on Daikin package tonnages
+   * This method provides the complete Direct/Up/Down structure
    */
-  private getDaikinSizingOptions(directTonnage: number): {
+  private getDaikinSizingOptions(inputTonnage: number): {
     direct: number;
     up: number | null;
     down: number | null;
+    directIndex: number;
+    availableTonnages: number[];
   } {
+    // First find the direct match (closest available tonnage)
+    const directTonnage = this.findClosestDaikinTonnage(inputTonnage);
+    
+    // Sort tonnages for index-based navigation
     const sortedTonnages = [...DAIKIN_PACKAGE_TONNAGES].sort((a, b) => a - b);
     const directIndex = sortedTonnages.findIndex(t => t === directTonnage);
+    
+    if (directIndex === -1) {
+      throw new Error(`Direct tonnage ${directTonnage} not found in available tonnages`);
+    }
     
     return {
       direct: directTonnage,
       up: directIndex < sortedTonnages.length - 1 ? sortedTonnages[directIndex + 1] : null,
-      down: directIndex > 0 ? sortedTonnages[directIndex - 1] : null
+      down: directIndex > 0 ? sortedTonnages[directIndex - 1] : null,
+      directIndex,
+      availableTonnages: sortedTonnages
     };
   }
 
+  /**
+   * Get all sizing variations for a given input tonnage
+   * Returns units categorized by their relationship to the direct match
+   */
+  private categorizeTonnageSizing(inputTonnage: number, availableUnits: DaikinUnitSpec[]): {
+    directSizing: DaikinUnitSpec[];
+    upsizing: DaikinUnitSpec[];
+    downsizing: DaikinUnitSpec[];
+    sizingOptions: {
+      direct: number;
+      up: number | null;
+      down: number | null;
+    };
+  } {
+    const sizingOptions = this.getDaikinSizingOptions(inputTonnage);
+    const { direct, up, down } = sizingOptions;
+    
+    // Categorize available units based on their tonnage relative to our sizing options
+    const directSizing: DaikinUnitSpec[] = [];
+    const upsizing: DaikinUnitSpec[] = [];
+    const downsizing: DaikinUnitSpec[] = [];
+    
+    for (const unit of availableUnits) {
+      const unitTonnage = parseFloat(unit.tonnage);
+      
+      if (Math.abs(unitTonnage - direct) < 0.001) {
+        // This unit matches our direct tonnage
+        directSizing.push(unit);
+      } else if (up !== null && unitTonnage > direct) {
+        // This unit is larger than direct
+        upsizing.push(unit);
+      } else if (down !== null && unitTonnage < direct) {
+        // This unit is smaller than direct
+        downsizing.push(unit);
+      }
+      // Units that don't fit any category are ignored
+    }
+    
+    // Sort each category by tonnage
+    const sortByTonnage = (a: DaikinUnitSpec, b: DaikinUnitSpec) => parseFloat(a.tonnage) - parseFloat(b.tonnage);
+    directSizing.sort(sortByTonnage);
+    upsizing.sort(sortByTonnage);
+    downsizing.sort(sortByTonnage);
+    
+    return {
+      directSizing,
+      upsizing,
+      downsizing,
+      sizingOptions: { direct, up, down }
+    };
+  }
+
+  /**
+   * Find nearest standard tonnage using corrected Daikin sizing logic
+   */
   private findNearestStandardTonnage(tons: number): Tonnage {
     return this.findClosestDaikinTonnage(tons).toString() as Tonnage;
+  }
+
+  /**
+   * Get comprehensive sizing information for any input tonnage
+   * This method provides complete sizing context including all available options
+   */
+  public getSizingInformation(inputTonnage: number): {
+    inputTonnage: number;
+    directMatch: number;
+    upSize: number | null;
+    downSize: number | null;
+    allAvailableSizes: number[];
+    sizingExplanation: string;
+  } {
+    const sizingOptions = this.getDaikinSizingOptions(inputTonnage);
+    
+    const explanation = this.generateSizingExplanation(inputTonnage, sizingOptions);
+    
+    return {
+      inputTonnage,
+      directMatch: sizingOptions.direct,
+      upSize: sizingOptions.up,
+      downSize: sizingOptions.down,
+      allAvailableSizes: sizingOptions.availableTonnages,
+      sizingExplanation: explanation
+    };
+  }
+
+  /**
+   * Generate human-readable explanation of sizing decisions
+   */
+  private generateSizingExplanation(inputTonnage: number, sizingOptions: {
+    direct: number;
+    up: number | null;
+    down: number | null;
+    availableTonnages: number[];
+  }): string {
+    const { direct, up, down } = sizingOptions;
+    const difference = Math.abs(inputTonnage - direct);
+    const percentDiff = (difference / inputTonnage * 100).toFixed(1);
+    
+    let explanation = `For input ${inputTonnage} tons: `;
+    
+    if (difference < 0.001) {
+      explanation += `Exact match found at ${direct} tons. `;
+    } else {
+      explanation += `Closest available size is ${direct} tons (${percentDiff}% ${direct > inputTonnage ? 'larger' : 'smaller'}). `;
+    }
+    
+    if (up) {
+      explanation += `Next larger size: ${up} tons. `;
+    } else {
+      explanation += `No larger size available. `;
+    }
+    
+    if (down) {
+      explanation += `Next smaller size: ${down} tons.`;
+    } else {
+      explanation += `No smaller size available.`;
+    }
+    
+    return explanation;
   }
 
   // ============================================================================
@@ -1071,17 +1222,20 @@ export class DaikinMatcher {
   }
 
   /**
-   * Advanced search with tonnage categorization and builder metadata
+   * Advanced search with proper Direct/Up/Down tonnage categorization and builder metadata
+   * Uses the corrected sizing logic based on DAIKIN_PACKAGE_TONNAGES
    */
   public searchBySpecInputAdvanced(searchInput: SpecSearchInputLegacy): AdvancedSpecSearchResponse {
     try {
       const searchTonnage = parseFloat(searchInput.tonnage);
-      const availableTonnages = DAIKIN_PACKAGE_TONNAGES.slice().sort((a, b) => a - b);
       
       // Get all possible matches using the existing tiered search logic
       const allMatches = this.searchBySpecInput(searchInput);
       
       if (allMatches.length === 0) {
+        // Get sizing options even if no matches to show available tonnages
+        const sizingOptions = this.getDaikinSizingOptions(searchTonnage);
+        
         return {
           directSizing: [],
           upsizing: [],
@@ -1104,39 +1258,27 @@ export class DaikinMatcher {
             upsizeCount: 0,
             downsizeCount: 0,
             searchTonnage: searchInput.tonnage,
-            availableTonnages: []
+            availableTonnages: sizingOptions.availableTonnages.map(t => t.toString())
           }
         };
       }
 
-      // Categorize results by tonnage relationship
-      const directSizing: AdvancedResult[] = [];
-      const upsizing: AdvancedResult[] = [];
-      const downsizing: AdvancedResult[] = [];
+      // Use the corrected categorization logic
+      const { directSizing: directUnits, upsizing: upsizeUnits, downsizing: downsizeUnits, sizingOptions } = 
+        this.categorizeTonnageSizing(searchTonnage, allMatches);
 
-      for (const unit of allMatches) {
-        const unitTonnage = parseFloat(unit.tonnage);
-        const advancedResult = this.createAdvancedResult(unit, searchTonnage, searchInput);
-        
-        if (Math.abs(unitTonnage - searchTonnage) < 0.1) {
-          // Direct match (within 0.1 ton tolerance)
-          directSizing.push(advancedResult);
-        } else if (unitTonnage > searchTonnage) {
-          // Larger than search tonnage - upsize
-          upsizing.push(advancedResult);
-        } else {
-          // Smaller than search tonnage - downsize
-          downsizing.push(advancedResult);
-        }
-      }
+      // Convert units to AdvancedResult format
+      const directSizing: AdvancedResult[] = directUnits.map(unit => 
+        this.createAdvancedResult(unit, searchTonnage, searchInput, 'direct', sizingOptions.direct)
+      );
+      const upsizing: AdvancedResult[] = upsizeUnits.map(unit => 
+        this.createAdvancedResult(unit, searchTonnage, searchInput, 'upsize', sizingOptions.direct)
+      );
+      const downsizing: AdvancedResult[] = downsizeUnits.map(unit => 
+        this.createAdvancedResult(unit, searchTonnage, searchInput, 'downsize', sizingOptions.direct)
+      );
 
-      // Sort each category by tonnage
-      const sortByTonnage = (a: AdvancedResult, b: AdvancedResult) => parseFloat(a.tonnage) - parseFloat(b.tonnage);
-      directSizing.sort(sortByTonnage);
-      upsizing.sort(sortByTonnage);
-      downsizing.sort(sortByTonnage);
-
-      // Get available tonnages for this system type
+      // Get available tonnages for this system type (filtered by what's actually in catalog)
       const systemTypeTonnages = Array.from(new Set(
         DAIKIN_R32_CATALOG
           .filter(unit => unit.systemType === searchInput.systemType)
@@ -1165,11 +1307,17 @@ export class DaikinMatcher {
           upsizeCount: upsizing.length,
           downsizeCount: downsizing.length,
           searchTonnage: searchInput.tonnage,
-          availableTonnages: systemTypeTonnages
+          availableTonnages: systemTypeTonnages,
+          recommendedDirectTonnage: sizingOptions.direct.toString(),
+          availableDirectTonnage: sizingOptions.direct.toString(),
+          upSizeTonnage: sizingOptions.up?.toString() || null,
+          downSizeTonnage: sizingOptions.down?.toString() || null
         }
       };
     } catch (error) {
       console.error("Error in searchBySpecInputAdvanced:", error);
+      const sizingOptions = this.getDaikinSizingOptions(searchTonnage);
+      
       return {
         directSizing: [],
         upsizing: [],
@@ -1192,7 +1340,7 @@ export class DaikinMatcher {
           upsizeCount: 0,
           downsizeCount: 0,
           searchTonnage: searchInput.tonnage,
-          availableTonnages: []
+          availableTonnages: sizingOptions.availableTonnages.map(t => t.toString())
         }
       };
     }
@@ -1200,20 +1348,33 @@ export class DaikinMatcher {
 
   /**
    * Create advanced result with builder metadata and sizing analysis
+   * Updated to support explicit sizing categories based on Direct/Up/Down logic
    */
-  private createAdvancedResult(unit: DaikinUnitSpec, searchTonnage: number, searchInput: SpecSearchInputLegacy): AdvancedResult {
+  private createAdvancedResult(
+    unit: DaikinUnitSpec, 
+    searchTonnage: number, 
+    searchInput: SpecSearchInputLegacy,
+    explicitSizingCategory?: "direct" | "upsize" | "downsize",
+    directTonnage?: number
+  ): AdvancedResult {
     const unitTonnage = parseFloat(unit.tonnage);
-    const sizingRatio = unitTonnage / searchTonnage;
-    const percentDifference = ((unitTonnage - searchTonnage) / searchTonnage) * 100;
+    const effectiveDirectTonnage = directTonnage || searchTonnage;
+    const sizingRatio = unitTonnage / effectiveDirectTonnage;
+    const percentDifference = ((unitTonnage - effectiveDirectTonnage) / effectiveDirectTonnage) * 100;
     
-    // Determine sizing category
+    // Use explicit sizing category if provided, otherwise determine from tonnage
     let sizingCategory: "direct" | "upsize" | "downsize";
-    if (Math.abs(unitTonnage - searchTonnage) < 0.1) {
-      sizingCategory = "direct";
-    } else if (unitTonnage > searchTonnage) {
-      sizingCategory = "upsize";
+    if (explicitSizingCategory) {
+      sizingCategory = explicitSizingCategory;
     } else {
-      sizingCategory = "downsize";
+      // Fallback to original logic if no explicit category provided
+      if (Math.abs(unitTonnage - searchTonnage) < 0.001) {
+        sizingCategory = "direct";
+      } else if (unitTonnage > searchTonnage) {
+        sizingCategory = "upsize";
+      } else {
+        sizingCategory = "downsize";
+      }
     }
 
     // Generate builder metadata
@@ -1431,13 +1592,17 @@ export class DaikinMatcher {
   // ============================================================================
 
   /**
-   * Find optimal sizing with direct match and alternatives
+   * Find optimal sizing with direct match and alternatives using corrected Direct/Up/Down logic
    */
   private findOptimalSizing(options: MatchingOptions): SizingResult {
     const { targetCapacity, systemType, efficiency, voltage, phases, gasCategory } = options;
     
     // Get tonnage conversion analysis
     const sizingAnalysis = this.analyzeBTUToTonnage(targetCapacity);
+    const targetTonnage = targetCapacity / 12000; // Convert BTU to tons
+    
+    // Use the corrected sizing logic to determine proper direct/up/down tonnages
+    const sizingOptions = this.getDaikinSizingOptions(targetTonnage);
     
     // Filter catalog by system type and other criteria
     let candidateUnits = DAIKIN_R32_CATALOG.filter(unit => {
@@ -1451,72 +1616,93 @@ export class DaikinMatcher {
       return systemMatch && efficiencyMatch && voltageMatch && phaseMatch && gasMatch;
     });
 
-    // Find direct match (within nominal capacity range)
-    const directMatch = this.findDirectMatch(candidateUnits, targetCapacity, sizingAnalysis);
-    
-    // Find alternatives within the same product family if direct match exists
-    let smallerAlternative: DaikinUnitSpec | null = null;
-    let largerAlternative: DaikinUnitSpec | null = null;
-    
-    if (directMatch) {
-      const familyUnits = candidateUnits.filter(unit => 
-        this.isSameProductFamily(unit, directMatch)
-      );
-      
-      smallerAlternative = this.findSmallerAlternative(familyUnits, directMatch);
-      largerAlternative = this.findLargerAlternative(familyUnits, directMatch);
-    } else {
-      // If no direct match, find nearest available size
-      const nearestMatch = this.findNearestMatch(candidateUnits, targetCapacity);
-      if (nearestMatch) {
-        // Use nearest as direct match and find alternatives
-        const familyUnits = candidateUnits.filter(unit => 
-          this.isSameProductFamily(unit, nearestMatch)
-        );
-        
-        return {
-          directMatch: nearestMatch,
-          smallerAlternative: this.findSmallerAlternative(familyUnits, nearestMatch),
-          largerAlternative: this.findLargerAlternative(familyUnits, nearestMatch),
-          sizingAnalysis
-        };
-      }
-    }
+    // Find units for each sizing category using the corrected tonnages
+    const directMatch = this.findUnitByTonnage(candidateUnits, sizingOptions.direct);
+    const smallerAlternative = sizingOptions.down ? 
+      this.findUnitByTonnage(candidateUnits, sizingOptions.down) : null;
+    const largerAlternative = sizingOptions.up ? 
+      this.findUnitByTonnage(candidateUnits, sizingOptions.up) : null;
     
     return {
       directMatch,
       smallerAlternative,
       largerAlternative,
-      sizingAnalysis
+      sizingAnalysis: {
+        ...sizingAnalysis,
+        actualDirectTonnage: sizingOptions.direct,
+        upSizeTonnage: sizingOptions.up,
+        downSizeTonnage: sizingOptions.down
+      } as BTUToTonnageConversion
     };
   }
 
   /**
-   * Analyze BTU to tonnage conversion with recommendations
+   * Find a unit by exact tonnage match from candidate units
+   */
+  private findUnitByTonnage(candidateUnits: DaikinUnitSpec[], targetTonnage: number): DaikinUnitSpec | null {
+    // Find units that match the target tonnage exactly
+    const matchingUnits = candidateUnits.filter(unit => 
+      Math.abs(parseFloat(unit.tonnage) - targetTonnage) < 0.001
+    );
+    
+    if (matchingUnits.length === 0) {
+      return null;
+    }
+    
+    // If multiple units match the tonnage, prefer higher efficiency, then by model number
+    return matchingUnits.sort((a, b) => {
+      // Sort by efficiency (higher SEER first)
+      if (a.seerRating !== b.seerRating) {
+        return (b.seerRating || 0) - (a.seerRating || 0);
+      }
+      // Then by model number for consistency
+      return a.modelNumber.localeCompare(b.modelNumber);
+    })[0];
+  }
+
+  /**
+   * Analyze BTU to tonnage conversion with recommendations using corrected Daikin sizing logic
    */
   private analyzeBTUToTonnage(btuCapacity: number): BTUToTonnageConversion {
     const { tonnage, exactTonnage } = btuToTonnage(btuCapacity, true);
     
-    const recommendedSizes = NOMINAL_TONNAGES.map(nominalTonnage => {
-      const percentDifference = Math.abs(btuCapacity - nominalTonnage.btuCapacity) / btuCapacity * 100;
-      const matchType = btuCapacity < nominalTonnage.minBTU ? "larger" :
-                       btuCapacity > nominalTonnage.maxBTU ? "smaller" : "direct";
+    // Use corrected Daikin sizing logic to determine the actual recommended sizes
+    const inputTonnage = btuCapacity / 12000;
+    const sizingOptions = this.getDaikinSizingOptions(inputTonnage);
+    
+    // Create recommendations based on available Daikin tonnages
+    const recommendedSizes = DAIKIN_PACKAGE_TONNAGES.map(daikinTonnage => {
+      const daikinBTU = daikinTonnage * 12000;
+      const percentDifference = Math.abs(btuCapacity - daikinBTU) / btuCapacity * 100;
+      
+      let matchType: "smaller" | "direct" | "larger";
+      if (Math.abs(daikinTonnage - sizingOptions.direct) < 0.001) {
+        matchType = "direct";
+      } else if (daikinTonnage < sizingOptions.direct) {
+        matchType = "smaller";
+      } else {
+        matchType = "larger";
+      }
       
       return {
-        tonnage: nominalTonnage.tonnage,
-        matchType: matchType as "smaller" | "direct" | "larger",
+        tonnage: daikinTonnage.toString() as Tonnage,
+        matchType,
         percentDifference,
-        recommended: percentDifference <= 15 // Recommend if within 15%
+        recommended: percentDifference <= 20 // Recommend if within 20% for Daikin units
       };
     }).sort((a, b) => a.percentDifference - b.percentDifference);
     
     return {
       btuCapacity,
       exactTonnage,
-      nearestStandardTonnage: tonnage as Tonnage,
-      sizingDifference: Math.abs(exactTonnage - parseFloat(tonnage)) / exactTonnage * 100,
-      recommendedSizes
-    };
+      nearestStandardTonnage: sizingOptions.direct.toString() as Tonnage,
+      sizingDifference: Math.abs(inputTonnage - sizingOptions.direct) / inputTonnage * 100,
+      recommendedSizes,
+      // Add additional information from corrected logic
+      daikinDirectMatch: sizingOptions.direct,
+      daikinUpSize: sizingOptions.up,
+      daikinDownSize: sizingOptions.down
+    } as BTUToTonnageConversion;
   }
 
   /**
