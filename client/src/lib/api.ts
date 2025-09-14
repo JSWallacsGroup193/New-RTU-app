@@ -34,7 +34,7 @@ export const decodeModelNumber = async (params: {
 
 // Search by specifications API call
 export const searchBySpecs = async (params: SpecSearchInput): Promise<SpecSearchResponse> => {
-  const response = await fetch("/api/search-specs", {
+  const response = await fetch("/api/specs/search", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

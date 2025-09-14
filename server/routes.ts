@@ -106,12 +106,25 @@ export function registerRoutes(app: Express): Server {
     try {
       const searchCriteria = specSearchInputSchema.parse(req.body);
       
-      const matches = matcher.findMatches(searchCriteria);
+      const matches = matcher.searchBySpecInput(searchCriteria);
       
       const response = specSearchResponseSchema.parse({
-        matches,
-        total: matches.length,
-        searchCriteria
+        results: matches.map(unit => ({
+          id: unit.id || unit.modelNumber,
+          modelNumber: unit.modelNumber,
+          systemType: unit.systemType,
+          btuCapacity: unit.btuCapacity,
+          voltage: unit.voltage,
+          phases: unit.phases,
+          specifications: [
+            { label: "SEER2 Rating", value: unit.seerRating?.toString() || "N/A" },
+            { label: "Refrigerant", value: unit.refrigerant || "R-32" },
+            { label: "Sound Level", value: unit.soundLevel ? `${unit.soundLevel} dB` : "N/A" },
+            { label: "Dimensions", value: unit.dimensions || "N/A" },
+            { label: "Weight", value: unit.weight ? `${unit.weight} lbs` : "N/A" }
+          ]
+        })),
+        count: matches.length
       });
       
       res.json(response);
