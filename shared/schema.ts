@@ -52,16 +52,33 @@ export const refrigerantEnum = z.enum(["R-410A", "R-32", "R-454B"]);
 export type RefrigerantType = z.infer<typeof refrigerantEnum>;
 
 // ============================================================================
+// VOLTAGE PARSING UTILITIES
+// ============================================================================
+
+// Parse combined voltage format to separate voltage and phases
+export function parseCombinedVoltage(combinedVoltage: CombinedVoltage): {
+  voltage: VoltageEnum;
+  phases: PhaseEnum;
+} {
+  const [voltage, phases] = combinedVoltage.split('/') as [VoltageEnum, PhaseEnum];
+  return { voltage, phases };
+}
+
+// Convert separate voltage and phases back to combined format
+export function combinedVoltageFromSeparate(voltage: VoltageEnum, phases: PhaseEnum): CombinedVoltage {
+  return `${voltage}/${phases}/60` as CombinedVoltage;
+}
+
+// ============================================================================
 // CONDITIONAL SEARCH INPUT SCHEMA
 // ============================================================================
 
 // Specification Search Input with ordered fields
 export const specSearchInputSchema = z.object({
-  // Required fields in order: System Type → Tonnage → Voltage → Phases
+  // Required fields in order: System Type → Tonnage → Combined Voltage (includes phases)
   systemType: systemTypeEnum,
   tonnage: tonnageEnum,
-  voltage: voltageEnum,
-  phases: phaseEnum,
+  voltage: combinedVoltageEnum, // Combined voltage/phase/frequency format
   
   // Conditional fields based on system type
   heatingBTU: z.number().optional(), // Required for Gas/Electric systems
@@ -98,6 +115,21 @@ export const specSearchInputSchema = z.object({
 });
 
 export type SpecSearchInput = z.infer<typeof specSearchInputSchema>;
+
+// Legacy interface for internal use with separated voltage and phases
+export interface SpecSearchInputLegacy {
+  systemType: SystemType;
+  tonnage: Tonnage;
+  voltage: VoltageEnum;
+  phases: PhaseEnum;
+  heatingBTU?: number;
+  heatKitKW?: number;
+  gasCategory?: GasCategory;
+  efficiency: Efficiency;
+  maxSoundLevel?: number;
+  refrigerant?: RefrigerantType;
+  driveType?: DriveType;
+}
 
 // Helper schema for BTU to tonnage conversion
 export const btuToTonnageSchema = z.object({

@@ -20,8 +20,7 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
     defaultValues: {
       systemType: "Heat Pump",
       tonnage: "3.0",
-      voltage: "208-230",
-      phases: "1",
+      voltage: "208-230/3/60",
       efficiency: "standard",
       heatingBTU: undefined,
       heatKitKW: undefined,
@@ -141,61 +140,32 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
                   )}
                 />
 
-                {/* Voltage */}
+                {/* Combined Voltage/Phase */}
                 <FormField
                   control={form.control}
                   name="voltage"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-medium">3. Voltage</FormLabel>
+                      <FormLabel className="text-base font-medium">3. Voltage & Phase</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value}
-                        data-testid="select-voltage"
+                        data-testid="select-voltage-phase"
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select voltage" />
+                            <SelectValue placeholder="Select voltage and phase" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="208-230">208-230V</SelectItem>
-                          <SelectItem value="460">460V</SelectItem>
-                          <SelectItem value="575">575V</SelectItem>
+                          <SelectItem value="208-230/1/60">208-230V / Single Phase</SelectItem>
+                          <SelectItem value="208-230/3/60">208-230V / Three Phase</SelectItem>
+                          <SelectItem value="460/3/60">460V / Three Phase</SelectItem>
+                          <SelectItem value="575/3/60">575V / Three Phase</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        Electrical voltage requirement for the unit
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Phases */}
-                <FormField
-                  control={form.control}
-                  name="phases"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-medium">4. Phases</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value}
-                        data-testid="select-phases"
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select phases" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="1">Single Phase (1)</SelectItem>
-                          <SelectItem value="3">Three Phase (3)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Electrical phase configuration (1 or 3 phase)
+                        Electrical voltage and phase configuration for the unit
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

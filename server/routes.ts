@@ -10,7 +10,9 @@ import {
   specSearchResponseSchema, 
   specSearchInputSchema,
   submitCorrectionRequestSchema,
-  submitMatchFeedbackRequestSchema
+  submitMatchFeedbackRequestSchema,
+  parseCombinedVoltage,
+  SpecSearchInputLegacy
 } from "@shared/schema";
 import { ALL_MODEL_SPECIFICATIONS } from "./data/daikinCatalog";
 import { z } from "zod";
@@ -54,7 +56,7 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to decode model number");
+      return handleInternalError(res, "Failed to decode model number", error);
     }
   });
 
@@ -90,14 +92,14 @@ export function registerRoutes(app: Express): Server {
       res.json({
         ...parsedModel,
         enhanced: true,
-        hasUserCorrections,
+        hasUserCorrections: hasCorrections,
         learningConfidence: confidence,
         sessionId: sessionId || 'anonymous'
       });
 
     } catch (error) {
       console.error("Error in enhanced decode:", error);
-      return handleInternalError(res, "Failed to decode model number with learning");
+      return handleInternalError(res, "Failed to decode model number with learning", error);
     }
   });
 
@@ -106,7 +108,17 @@ export function registerRoutes(app: Express): Server {
     try {
       const searchCriteria = specSearchInputSchema.parse(req.body);
       
-      const matches = matcher.searchBySpecInput(searchCriteria);
+      // Parse the combined voltage format back to separate voltage and phases
+      const { voltage, phases } = parseCombinedVoltage(searchCriteria.voltage);
+      
+      // Create search criteria with separated voltage and phases for the matcher
+      const searchCriteriaWithSeparatedVoltage: SpecSearchInputLegacy = {
+        ...searchCriteria,
+        voltage,
+        phases
+      };
+      
+      const matches = matcher.searchBySpecInput(searchCriteriaWithSeparatedVoltage);
       
       const response = specSearchResponseSchema.parse({
         results: matches.map(unit => ({
@@ -120,7 +132,7 @@ export function registerRoutes(app: Express): Server {
             { label: "SEER2 Rating", value: unit.seerRating?.toString() || "N/A" },
             { label: "Refrigerant", value: unit.refrigerant || "R-32" },
             { label: "Sound Level", value: unit.soundLevel ? `${unit.soundLevel} dB` : "N/A" },
-            { label: "Dimensions", value: unit.dimensions || "N/A" },
+            { label: "Dimensions", value: unit.dimensions ? `${unit.dimensions.length}" x ${unit.dimensions.width}" x ${unit.dimensions.height}"` : "N/A" },
             { label: "Weight", value: unit.weight ? `${unit.weight} lbs` : "N/A" }
           ]
         })),
@@ -133,7 +145,18 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to search specifications");
+      return handleInternalError(res, "Failed to search specifications", error);
+    }
+  });
+
+  // Temporary debug endpoint to check catalog status
+  app.get("/api/debug/catalog-info", (req, res) => {
+    try {
+      const catalog = matcher.getDebugCatalogInfo();
+      res.json(catalog);
+    } catch (error) {
+      console.error("Error getting catalog info:", error);
+      res.status(500).json({ error: "Failed to get catalog info" });
     }
   });
 
@@ -208,7 +231,7 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error recording user correction:", error);
-      return handleInternalError(res, "Failed to record user correction");
+      return handleInternalError(res, "Failed to record user correction", error);
     }
   });
 
@@ -253,7 +276,7 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error recording match feedback:", error);
-      return handleInternalError(res, "Failed to record match feedback");
+      return handleInternalError(res, "Failed to record match feedback", error);
     }
   });
 
@@ -273,7 +296,7 @@ export function registerRoutes(app: Express): Server {
       const timeframe = {
         startDate: validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined,
         endDate: validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined,
-        period: validatedQuery.period as const
+        period: validatedQuery.period
       };
 
       // Validate date range
@@ -305,7 +328,7 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to fetch learning analytics");
+      return handleInternalError(res, "Failed to fetch learning analytics", error);
     }
   });
 
@@ -361,7 +384,7 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to fetch user corrections");
+      return handleInternalError(res, "Failed to fetch user corrections", error);
     }
   });
 
@@ -381,7 +404,7 @@ export function registerRoutes(app: Express): Server {
       const timeframe = {
         startDate: validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined,
         endDate: validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined,
-        period: validatedQuery.period as const
+        period: validatedQuery.period
       };
 
       // Validate date range
@@ -413,7 +436,7 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to fetch performance metrics");
+      return handleInternalError(res, "Failed to fetch performance metrics", error);
     }
   });
 
@@ -429,7 +452,7 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error fetching improvement recommendations:", error);
-      return handleInternalError(res, "Failed to fetch improvement recommendations");
+      return handleInternalError(res, "Failed to fetch improvement recommendations", error);
     }
   });
 
@@ -453,7 +476,7 @@ export function registerRoutes(app: Express): Server {
       const timeframe = {
         startDate: validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined,
         endDate: validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined,
-        period: validatedQuery.period as const
+        period: validatedQuery.period
       };
 
       // Validate date range
@@ -473,7 +496,7 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to fetch manufacturer analytics");
+      return handleInternalError(res, "Failed to fetch manufacturer analytics", error);
     }
   });
 
@@ -494,7 +517,7 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error fetching learning trends:", error);
-      return handleInternalError(res, "Failed to fetch learning trends");
+      return handleInternalError(res, "Failed to fetch learning trends", error);
     }
   });
 
@@ -507,7 +530,7 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error fetching parser insights:", error);
-      return handleInternalError(res, "Failed to fetch parser insights");
+      return handleInternalError(res, "Failed to fetch parser insights", error);
     }
   });
 
@@ -563,7 +586,7 @@ export function registerRoutes(app: Express): Server {
       res.json({
         exportedAt: new Date().toISOString(),
         exportType: validatedQuery.type,
-        totalRecords: Object.values(data).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
+        totalRecords: Object.values(data).reduce((sum: number, arr: any) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
         data
       });
 
@@ -572,7 +595,7 @@ export function registerRoutes(app: Express): Server {
       if (error instanceof z.ZodError) {
         return handleValidationError(res, error);
       }
-      return handleInternalError(res, "Failed to export learning data");
+      return handleInternalError(res, "Failed to export learning data", error);
     }
   });
 
