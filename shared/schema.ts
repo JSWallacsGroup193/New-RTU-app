@@ -605,6 +605,65 @@ export const enhancedSpecSearchResponseSchema = z.object({
 export type EnhancedSpecSearchResponse = z.infer<typeof enhancedSpecSearchResponseSchema>;
 
 // ============================================================================
+// ADVANCED SEARCH API WITH SIZING CATEGORIZATION
+// ============================================================================
+
+// Builder metadata for unit composition analysis
+export const builderMetadataSchema = z.object({
+  family: z.string(), // DSC, DSG, DSH, etc.
+  capacityCode: z.string(), // 036, 048, 060, etc.
+  efficiency: efficiencyEnum,
+  composition: z.object({
+    refrigerant: refrigerantEnum,
+    driveType: driveTypeEnum,
+    stages: z.number()
+  }),
+  replacementRationale: z.string() // Why this unit is a good replacement option
+});
+
+export type BuilderMetadata = z.infer<typeof builderMetadataSchema>;
+
+// Advanced search result with builder metadata and tonnage categorization
+export const advancedResultSchema = z.object({
+  id: z.string(),
+  modelNumber: z.string(),
+  systemType: systemTypeEnum,
+  btuCapacity: z.number(),
+  tonnage: tonnageEnum,
+  voltage: z.string(),
+  phases: z.string(),
+  specifications: z.array(z.object({
+    label: z.string(),
+    value: z.string(),
+    unit: z.string().optional()
+  })),
+  builderMetadata: builderMetadataSchema,
+  sizingCategory: z.enum(["direct", "upsize", "downsize"]), // Relationship to search tonnage
+  sizingRatio: z.number(), // unit tonnage / search tonnage
+  percentDifference: z.number() // Percentage difference from search tonnage
+});
+
+export type AdvancedResult = z.infer<typeof advancedResultSchema>;
+
+// Advanced search response with categorized results
+export const advancedSpecSearchResponseSchema = z.object({
+  directSizing: z.array(advancedResultSchema), // Exact tonnage matches
+  upsizing: z.array(advancedResultSchema),     // Larger tonnage options
+  downsizing: z.array(advancedResultSchema),   // Smaller tonnage options
+  searchCriteria: specSearchInputSchema,
+  summary: z.object({
+    totalResults: z.number(),
+    directCount: z.number(),
+    upsizeCount: z.number(),
+    downsizeCount: z.number(),
+    searchTonnage: tonnageEnum,
+    availableTonnages: z.array(tonnageEnum) // What Daikin offers for this system type
+  })
+});
+
+export type AdvancedSpecSearchResponse = z.infer<typeof advancedSpecSearchResponseSchema>;
+
+// ============================================================================
 // POSITION-BASED MODEL BUILDING ARCHITECTURE
 // ============================================================================
 

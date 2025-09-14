@@ -28,7 +28,12 @@ import type {
   FamilyValidationRequest,
   FamilyValidationResponse,
   PositionMapping,
-  FamilyDefinitions
+  FamilyDefinitions,
+  AdvancedResult,
+  AdvancedSpecSearchResponse,
+  BuilderMetadata,
+  RefrigerantType,
+  DriveType
 } from "@shared/schema";
 import {
   DAIKIN_R32_CATALOG,
@@ -1063,6 +1068,226 @@ export class DaikinMatcher {
     }
     
     return results;
+  }
+
+  /**
+   * Advanced search with tonnage categorization and builder metadata
+   */
+  public searchBySpecInputAdvanced(searchInput: SpecSearchInputLegacy): AdvancedSpecSearchResponse {
+    try {
+      const searchTonnage = parseFloat(searchInput.tonnage);
+      const availableTonnages = DAIKIN_PACKAGE_TONNAGES.slice().sort((a, b) => a - b);
+      
+      // Get all possible matches using the existing tiered search logic
+      const allMatches = this.searchBySpecInput(searchInput);
+      
+      if (allMatches.length === 0) {
+        return {
+          directSizing: [],
+          upsizing: [],
+          downsizing: [],
+          searchCriteria: {
+            systemType: searchInput.systemType,
+            tonnage: searchInput.tonnage,
+            voltage: `${searchInput.voltage}/${searchInput.phases}/60` as any,
+            heatingBTU: searchInput.heatingBTU,
+            heatKitKW: searchInput.heatKitKW,
+            gasCategory: searchInput.gasCategory,
+            efficiency: searchInput.efficiency,
+            maxSoundLevel: searchInput.maxSoundLevel,
+            refrigerant: searchInput.refrigerant,
+            driveType: searchInput.driveType
+          },
+          summary: {
+            totalResults: 0,
+            directCount: 0,
+            upsizeCount: 0,
+            downsizeCount: 0,
+            searchTonnage: searchInput.tonnage,
+            availableTonnages: []
+          }
+        };
+      }
+
+      // Categorize results by tonnage relationship
+      const directSizing: AdvancedResult[] = [];
+      const upsizing: AdvancedResult[] = [];
+      const downsizing: AdvancedResult[] = [];
+
+      for (const unit of allMatches) {
+        const unitTonnage = parseFloat(unit.tonnage);
+        const advancedResult = this.createAdvancedResult(unit, searchTonnage, searchInput);
+        
+        if (Math.abs(unitTonnage - searchTonnage) < 0.1) {
+          // Direct match (within 0.1 ton tolerance)
+          directSizing.push(advancedResult);
+        } else if (unitTonnage > searchTonnage) {
+          // Larger than search tonnage - upsize
+          upsizing.push(advancedResult);
+        } else {
+          // Smaller than search tonnage - downsize
+          downsizing.push(advancedResult);
+        }
+      }
+
+      // Sort each category by tonnage
+      const sortByTonnage = (a: AdvancedResult, b: AdvancedResult) => parseFloat(a.tonnage) - parseFloat(b.tonnage);
+      directSizing.sort(sortByTonnage);
+      upsizing.sort(sortByTonnage);
+      downsizing.sort(sortByTonnage);
+
+      // Get available tonnages for this system type
+      const systemTypeTonnages = Array.from(new Set(
+        DAIKIN_R32_CATALOG
+          .filter(unit => unit.systemType === searchInput.systemType)
+          .map(unit => unit.tonnage)
+      )).sort();
+
+      return {
+        directSizing,
+        upsizing,
+        downsizing,
+        searchCriteria: {
+          systemType: searchInput.systemType,
+          tonnage: searchInput.tonnage,
+          voltage: `${searchInput.voltage}/${searchInput.phases}/60` as any,
+          heatingBTU: searchInput.heatingBTU,
+          heatKitKW: searchInput.heatKitKW,
+          gasCategory: searchInput.gasCategory,
+          efficiency: searchInput.efficiency,
+          maxSoundLevel: searchInput.maxSoundLevel,
+          refrigerant: searchInput.refrigerant,
+          driveType: searchInput.driveType
+        },
+        summary: {
+          totalResults: directSizing.length + upsizing.length + downsizing.length,
+          directCount: directSizing.length,
+          upsizeCount: upsizing.length,
+          downsizeCount: downsizing.length,
+          searchTonnage: searchInput.tonnage,
+          availableTonnages: systemTypeTonnages
+        }
+      };
+    } catch (error) {
+      console.error("Error in searchBySpecInputAdvanced:", error);
+      return {
+        directSizing: [],
+        upsizing: [],
+        downsizing: [],
+        searchCriteria: {
+          systemType: searchInput.systemType,
+          tonnage: searchInput.tonnage,
+          voltage: `${searchInput.voltage}/${searchInput.phases}/60` as any,
+          heatingBTU: searchInput.heatingBTU,
+          heatKitKW: searchInput.heatKitKW,
+          gasCategory: searchInput.gasCategory,
+          efficiency: searchInput.efficiency,
+          maxSoundLevel: searchInput.maxSoundLevel,
+          refrigerant: searchInput.refrigerant,
+          driveType: searchInput.driveType
+        },
+        summary: {
+          totalResults: 0,
+          directCount: 0,
+          upsizeCount: 0,
+          downsizeCount: 0,
+          searchTonnage: searchInput.tonnage,
+          availableTonnages: []
+        }
+      };
+    }
+  }
+
+  /**
+   * Create advanced result with builder metadata and sizing analysis
+   */
+  private createAdvancedResult(unit: DaikinUnitSpec, searchTonnage: number, searchInput: SpecSearchInputLegacy): AdvancedResult {
+    const unitTonnage = parseFloat(unit.tonnage);
+    const sizingRatio = unitTonnage / searchTonnage;
+    const percentDifference = ((unitTonnage - searchTonnage) / searchTonnage) * 100;
+    
+    // Determine sizing category
+    let sizingCategory: "direct" | "upsize" | "downsize";
+    if (Math.abs(unitTonnage - searchTonnage) < 0.1) {
+      sizingCategory = "direct";
+    } else if (unitTonnage > searchTonnage) {
+      sizingCategory = "upsize";
+    } else {
+      sizingCategory = "downsize";
+    }
+
+    // Generate builder metadata
+    const builderMetadata = this.generateBuilderMetadata(unit, searchInput, sizingCategory);
+
+    return {
+      id: unit.id || unit.modelNumber,
+      modelNumber: unit.modelNumber,
+      systemType: unit.systemType,
+      btuCapacity: unit.btuCapacity,
+      tonnage: unit.tonnage,
+      voltage: unit.voltage,
+      phases: unit.phases,
+      specifications: [
+        { label: "SEER2 Rating", value: unit.seerRating?.toString() || "N/A" },
+        { label: "Refrigerant", value: unit.refrigerant || "R-32" },
+        { label: "Sound Level", value: unit.soundLevel ? `${unit.soundLevel} dB` : "N/A" },
+        { label: "Drive Type", value: unit.driveType || "Variable Speed" },
+        { label: "Dimensions", value: unit.dimensions ? `${unit.dimensions.length}" x ${unit.dimensions.width}" x ${unit.dimensions.height}"` : "N/A" },
+        { label: "Weight", value: unit.weight ? `${unit.weight} lbs` : "N/A" }
+      ],
+      builderMetadata,
+      sizingCategory,
+      sizingRatio,
+      percentDifference
+    };
+  }
+
+  /**
+   * Generate builder metadata for unit composition analysis
+   */
+  private generateBuilderMetadata(unit: DaikinUnitSpec, searchInput: SpecSearchInputLegacy, sizingCategory: string): BuilderMetadata {
+    // Extract family from model number (first 3 characters typically)
+    const family = unit.modelNumber.substring(0, 3).toUpperCase();
+    
+    // Extract capacity code (usually positions 4-6 in model number)
+    const capacityCode = unit.modelNumber.substring(3, 6);
+    
+    // Determine efficiency level from family or specifications
+    let efficiency: Efficiency = "standard";
+    if (family.includes("H") || unit.seerRating && unit.seerRating >= 15) {
+      efficiency = "high";
+    }
+
+    // Generate replacement rationale based on sizing category and specifications
+    let replacementRationale: string;
+    if (sizingCategory === "direct") {
+      replacementRationale = `Direct tonnage replacement with modern R-32 refrigerant and ${unit.seerRating ? `SEER2 ${unit.seerRating}` : 'standard'} efficiency.`;
+    } else if (sizingCategory === "upsize") {
+      const percentIncrease = Math.round(((parseFloat(unit.tonnage) / parseFloat(searchInput.tonnage)) - 1) * 100);
+      replacementRationale = `Upsize option (+${percentIncrease}%) for enhanced capacity and improved comfort in extreme conditions.`;
+    } else {
+      const percentDecrease = Math.round(((parseFloat(searchInput.tonnage) / parseFloat(unit.tonnage)) - 1) * 100);
+      replacementRationale = `Downsize option (-${percentDecrease}%) for energy savings and reduced operating costs while maintaining adequate cooling.`;
+    }
+
+    // Add system-specific rationale
+    if (searchInput.systemType === "Gas/Electric" && unit.systemType === "Gas/Electric") {
+      replacementRationale += ` Gas heating maintained for consistent heating performance.`;
+    } else if (searchInput.systemType === "Heat Pump" && unit.systemType === "Heat Pump") {
+      replacementRationale += ` Heat pump technology provides efficient heating and cooling year-round.`;
+    }
+
+    return {
+      family,
+      capacityCode,
+      efficiency,
+      composition: {
+        refrigerant: (unit.refrigerant as RefrigerantType) || "R-32",
+        driveType: (unit.driveType as DriveType) || "Variable Speed",
+        stages: unit.coolingStages || 1
+      },
+      replacementRationale
+    };
   }
 
   /**

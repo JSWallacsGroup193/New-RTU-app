@@ -9,6 +9,7 @@ import {
   decodeResponseSchema, 
   specSearchResponseSchema, 
   specSearchInputSchema,
+  advancedSpecSearchResponseSchema,
   submitCorrectionRequestSchema,
   submitMatchFeedbackRequestSchema,
   parseCombinedVoltage,
@@ -146,6 +147,36 @@ export function registerRoutes(app: Express): Server {
         return handleValidationError(res, error);
       }
       return handleInternalError(res, "Failed to search specifications", error);
+    }
+  });
+
+  // Advanced search specifications endpoint with tonnage categorization
+  app.post("/api/specs/search-advanced", (req, res) => {
+    try {
+      const searchCriteria = specSearchInputSchema.parse(req.body);
+      
+      // Parse the combined voltage format back to separate voltage and phases
+      const { voltage, phases } = parseCombinedVoltage(searchCriteria.voltage);
+      
+      // Create search criteria with separated voltage and phases for the matcher
+      const searchCriteriaWithSeparatedVoltage: SpecSearchInputLegacy = {
+        ...searchCriteria,
+        voltage,
+        phases
+      };
+      
+      const advancedResults = matcher.searchBySpecInputAdvanced(searchCriteriaWithSeparatedVoltage);
+      
+      // Validate response against schema
+      const response = advancedSpecSearchResponseSchema.parse(advancedResults);
+      
+      res.json(response);
+    } catch (error) {
+      console.error("Error in advanced specs search:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
+      return handleInternalError(res, "Failed to search specifications with advanced categorization", error);
     }
   });
 
