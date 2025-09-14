@@ -19,6 +19,15 @@ export type Efficiency = z.infer<typeof efficiencyEnum>;
 export const voltageEnum = z.enum(["208-230", "460", "575"]);
 export type VoltageEnum = z.infer<typeof voltageEnum>;
 
+// Combined voltage/phase options for simplified UI
+export const combinedVoltageEnum = z.enum([
+  "208-230/1/60",
+  "208-230/3/60", 
+  "460/3/60",
+  "575/3/60"
+]);
+export type CombinedVoltage = z.infer<typeof combinedVoltageEnum>;
+
 // Phase Options
 export const phaseEnum = z.enum(["1", "3"]);
 export type PhaseEnum = z.infer<typeof phaseEnum>;

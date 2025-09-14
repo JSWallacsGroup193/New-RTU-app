@@ -49,6 +49,9 @@ import {
   validateFamilySpecifications
 } from "../data/daikinCatalog";
 
+// Daikin Package Unit Available Tonnages (exact values)
+const DAIKIN_PACKAGE_TONNAGES = [3, 4, 5, 6, 7.5, 8.5, 10, 12.5, 15, 20, 25] as const;
+
 // ============================================================================
 // SMART SIZING LOGIC TYPES
 // ============================================================================
@@ -602,20 +605,44 @@ export class DaikinMatcher {
     return `Fallback matching applied: ${warnings.join("; ")}`;
   }
 
-  private findNearestStandardTonnage(tons: number): Tonnage {
-    const standardTonnages = NOMINAL_TONNAGES.map(t => parseFloat(t.tonnage));
-    let nearest = standardTonnages[0];
-    let minDiff = Math.abs(nearest - tons);
+  /**
+   * Find closest Daikin package unit tonnage with fuzzy matching
+   */
+  private findClosestDaikinTonnage(inputTonnage: number): number {
+    let closest = DAIKIN_PACKAGE_TONNAGES[0];
+    let minDiff = Math.abs(closest - inputTonnage);
     
-    for (const tonnage of standardTonnages) {
-      const diff = Math.abs(tonnage - tons);
+    for (const tonnage of DAIKIN_PACKAGE_TONNAGES) {
+      const diff = Math.abs(tonnage - inputTonnage);
       if (diff < minDiff) {
         minDiff = diff;
-        nearest = tonnage;
+        closest = tonnage;
       }
     }
     
-    return nearest.toString() as Tonnage;
+    return closest;
+  }
+
+  /**
+   * Get sizing options (direct, up, down) based on Daikin package tonnages
+   */
+  private getDaikinSizingOptions(directTonnage: number): {
+    direct: number;
+    up: number | null;
+    down: number | null;
+  } {
+    const sortedTonnages = [...DAIKIN_PACKAGE_TONNAGES].sort((a, b) => a - b);
+    const directIndex = sortedTonnages.findIndex(t => t === directTonnage);
+    
+    return {
+      direct: directTonnage,
+      up: directIndex < sortedTonnages.length - 1 ? sortedTonnages[directIndex + 1] : null,
+      down: directIndex > 0 ? sortedTonnages[directIndex - 1] : null
+    };
+  }
+
+  private findNearestStandardTonnage(tons: number): Tonnage {
+    return this.findClosestDaikinTonnage(tons).toString() as Tonnage;
   }
 
   // ============================================================================
@@ -883,13 +910,23 @@ export class DaikinMatcher {
   }
 
   /**
-   * Search by specification input (UPDATED FOR STRICT EXACT MATCHING)
+   * Search by specification input with Daikin package unit fuzzy matching
    */
   public searchBySpecInput(searchInput: SpecSearchInput): DaikinUnitSpec[] {
     try {
+      // Use fuzzy matching for tonnage - find closest Daikin package tonnage
+      const inputTonnage = parseFloat(searchInput.tonnage);
+      const closestTonnage = this.findClosestDaikinTonnage(inputTonnage);
+      
+      // Create modified search criteria with closest tonnage
+      const modifiedCriteria = {
+        ...searchInput,
+        tonnage: closestTonnage.toString() as Tonnage
+      };
+      
       return DAIKIN_R32_CATALOG.filter(unit => {
-        // Use strict exact matching
-        return this.strictExactMatch(unit, searchInput);
+        // Use modified criteria for matching
+        return this.strictExactMatch(unit, modifiedCriteria);
       });
     } catch (error) {
       console.error("Error in searchBySpecInput:", error);
