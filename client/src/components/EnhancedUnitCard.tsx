@@ -5,8 +5,8 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import EditableSpecificationForm from "./EditableSpecificationForm";
-import AccessoryManagement from "./AccessoryManagement";
 import { 
   Thermometer, 
   Zap, 
@@ -23,10 +23,13 @@ import {
   Plus,
   FileText,
   Star,
-  Edit2
+  Edit2,
+  Code2,
+  Settings
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DaikinFamilyKeys } from "@shared/schema";
+import { useRealTimeModelBuilder } from "@/hooks/useModelBuilder";
 
 // Factory-installed option interface
 interface FactoryOption {
@@ -132,8 +135,20 @@ export default function EnhancedUnitCard({
   onFieldAccessoriesChange
 }: EnhancedUnitCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState("specs");
+  const [activeTab, setActiveTab] = useState("nomenclature");
   const [isEditMode, setIsEditMode] = useState(false);
+  
+  // Nomenclature builder state
+  const [nomenclatureSegments, setNomenclatureSegments] = useState<Array<{
+    position: string;
+    code: string;
+    description: string;
+    options: Array<{ value: string; description: string; }>;
+    selectedValue: string;
+  }>>([]);
+  const [dynamicModelNumber, setDynamicModelNumber] = useState(unit.modelNumber);
+  
+  const modelBuilder = useRealTimeModelBuilder();
 
   const sizeMatchConfig = {
     smaller: {
@@ -193,6 +208,115 @@ export default function EnhancedUnitCard({
 
   const handleCancel = () => {
     setIsEditMode(false);
+  };
+
+  // Initialize nomenclature segments based on the current model number
+  useEffect(() => {
+    if (unit.modelNumber && family) {
+      const segments = getNomenclatureBreakdown(unit.modelNumber);
+      setNomenclatureSegments(segments);
+      setDynamicModelNumber(unit.modelNumber);
+    }
+  }, [unit.modelNumber, family]);
+
+  // Get nomenclature breakdown for Daikin model numbers
+  const getNomenclatureBreakdown = (model: string) => {
+    if (!model || !family) return [];
+    
+    return [
+      {
+        position: "Position 1",
+        code: model.charAt(0) || "D",
+        description: "Manufacturer",
+        options: [{ value: "D", description: "Daikin" }],
+        selectedValue: model.charAt(0) || "D"
+      },
+      {
+        position: "Position 2", 
+        code: model.charAt(1) || "S",
+        description: "Efficiency Level",
+        options: [
+          { value: "S", description: "Standard Efficiency" },
+          { value: "H", description: "High Efficiency" }
+        ],
+        selectedValue: model.charAt(1) || "S"
+      },
+      {
+        position: "Position 3",
+        code: model.charAt(2) || "C", 
+        description: "System Type",
+        options: [
+          { value: "C", description: "Straight A/C" },
+          { value: "G", description: "Gas/Electric" },
+          { value: "H", description: "Heat Pump" }
+        ],
+        selectedValue: model.charAt(2) || "C"
+      },
+      {
+        position: "Position 4-6",
+        code: model.substring(3, 6) || "036",
+        description: "Nominal Capacity (MBH)",
+        options: [
+          { value: "036", description: "36,000 BTU/h (3 Ton)" },
+          { value: "048", description: "48,000 BTU/h (4 Ton)" },
+          { value: "060", description: "60,000 BTU/h (5 Ton)" },
+          { value: "072", description: "72,000 BTU/h (6 Ton)" },
+          { value: "090", description: "90,000 BTU/h (7.5 Ton)" },
+          { value: "120", description: "120,000 BTU/h (10 Ton)" },
+          { value: "150", description: "150,000 BTU/h (12.5 Ton)" },
+          { value: "180", description: "180,000 BTU/h (15 Ton)" },
+          { value: "240", description: "240,000 BTU/h (20 Ton)" },
+          { value: "300", description: "300,000 BTU/h (25 Ton)" }
+        ],
+        selectedValue: model.substring(3, 6) || "036"
+      },
+      {
+        position: "Position 7",
+        code: model.charAt(6) || "D",
+        description: "Fan/Drive Type", 
+        options: [
+          { value: "D", description: "Direct Drive" },
+          { value: "L", description: "Medium Static" },
+          { value: "W", description: "High Static" }
+        ],
+        selectedValue: model.charAt(6) || "D"
+      },
+      {
+        position: "Position 8",
+        code: model.charAt(7) || "3",
+        description: "Voltage/Phase",
+        options: [
+          { value: "1", description: "208/230V 1φ" },
+          { value: "3", description: "208/230V 3φ" },
+          { value: "4", description: "460V 3φ" },
+          { value: "7", description: "575V 3φ" }
+        ],
+        selectedValue: model.charAt(7) || "3"
+      }
+    ];
+  };
+
+  // Handle nomenclature segment changes
+  const handleSegmentChange = (segmentIndex: number, newValue: string) => {
+    const updatedSegments = [...nomenclatureSegments];
+    updatedSegments[segmentIndex].selectedValue = newValue;
+    updatedSegments[segmentIndex].code = newValue;
+    
+    // Rebuild model number from segments
+    const newModelNumber = updatedSegments.reduce((model, segment, index) => {
+      if (index === 3) { // Position 4-6 is 3 characters
+        return model + segment.selectedValue;
+      }
+      return model + segment.selectedValue;
+    }, "");
+    
+    setNomenclatureSegments(updatedSegments);
+    setDynamicModelNumber(newModelNumber);
+    
+    // Trigger model update if callback provided
+    if (onSpecificationUpdate) {
+      onSpecificationUpdate(newModelNumber, { /* updated specs based on new model */ });
+    }
   };
 
   // Convert unit data to the format expected by EditableSpecificationForm
@@ -361,11 +485,106 @@ export default function EnhancedUnitCard({
             
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="specs">Technical Specs</TabsTrigger>
-                <TabsTrigger value="accessories">Accessories</TabsTrigger>
+                <TabsTrigger value="nomenclature" data-testid="tab-nomenclature">Nomenclature Builder</TabsTrigger>
+                <TabsTrigger value="specifications" data-testid="tab-specifications">Specifications</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="specs" className="space-y-4">
+              <TabsContent value="nomenclature" className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Code2 className="h-4 w-4" />
+                    Model Number Builder
+                  </h4>
+                  
+                  {/* Dynamic Model Number Display */}
+                  <div className="bg-muted/50 p-3 rounded-md mb-4">
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground mb-1">Current Model Number</p>
+                      <p className="text-lg font-mono font-bold text-primary" data-testid="text-dynamic-model-number">
+                        {dynamicModelNumber}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Interactive Nomenclature Segments */}
+                  <div className="space-y-4">
+                    {nomenclatureSegments.map((segment, index) => (
+                      <div key={segment.position} className="border rounded-md p-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="text-xs">
+                                {segment.position}
+                              </Badge>
+                              <span className="text-sm font-medium">{segment.description}</span>
+                            </div>
+                            <Select 
+                              value={segment.selectedValue} 
+                              onValueChange={(value) => handleSegmentChange(index, value)}
+                              data-testid={`select-segment-${index}`}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {segment.options.map((option) => (
+                                  <SelectItem 
+                                    key={option.value} 
+                                    value={option.value}
+                                    data-testid={`option-${segment.position.toLowerCase().replace(/\s+/g, '-')}-${option.value}`}
+                                  >
+                                    <div>
+                                      <span className="font-medium">{option.value}</span>
+                                      <span className="text-muted-foreground ml-2">- {option.description}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-lg font-mono font-bold text-primary">
+                              {segment.selectedValue}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Model Building Actions */}
+                  {isEditable && (
+                    <div className="flex gap-2 mt-4">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          if (onSpecificationUpdate) {
+                            onSpecificationUpdate(dynamicModelNumber, convertToSpecifications());
+                          }
+                        }}
+                        data-testid="button-apply-model-changes"
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        Apply Changes
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => {
+                          setNomenclatureSegments(getNomenclatureBreakdown(unit.modelNumber));
+                          setDynamicModelNumber(unit.modelNumber);
+                        }}
+                        data-testid="button-reset-model"
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="specifications" className="space-y-4">
                 {/* Performance Ratings */}
                 <div>
                   <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
@@ -483,28 +702,6 @@ export default function EnhancedUnitCard({
                     )}
                   </div>
                 </div>
-              </TabsContent>
-              
-              <TabsContent value="accessories" className="space-y-4">
-                {showAccessories && family ? (
-                  <AccessoryManagement
-                    family={family}
-                    modelNumber={unit.modelNumber}
-                    systemType={unit.systemType}
-                    tonnage={unit.tonnage}
-                    selectedFactoryOptions={selectedFactoryOptions}
-                    selectedFieldAccessories={selectedFieldAccessories}
-                    onFactoryOptionsChange={onFactoryOptionsChange}
-                    onFieldAccessoriesChange={onFieldAccessoriesChange}
-                    showPricing={true}
-                    mode="selection"
-                  />
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Wrench className="h-8 w-8 mx-auto mb-2" />
-                    <p>Accessory management not available for this unit</p>
-                  </div>
-                )}
               </TabsContent>
             </Tabs>
           </CollapsibleContent>
