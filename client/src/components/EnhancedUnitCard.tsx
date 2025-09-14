@@ -25,11 +25,13 @@ import {
   Star,
   Edit2,
   Code2,
-  Settings
+  Settings,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { DaikinFamilyKeys } from "@shared/schema";
+import { useState, useEffect, useRef } from "react";
 import { useRealTimeModelBuilder } from "@/hooks/useModelBuilder";
+import type { BuildModelRequest, DaikinFamilyKeys } from "@shared/schema";
 
 // Factory-installed option interface
 interface FactoryOption {
@@ -147,6 +149,8 @@ export default function EnhancedUnitCard({
     selectedValue: string;
   }>>([]);
   const [dynamicModelNumber, setDynamicModelNumber] = useState(unit.modelNumber);
+  const [modelBuildError, setModelBuildError] = useState<string | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
   
   const modelBuilder = useRealTimeModelBuilder();
 
@@ -218,6 +222,15 @@ export default function EnhancedUnitCard({
       setDynamicModelNumber(unit.modelNumber);
     }
   }, [unit.modelNumber, family]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+    };
+  }, []);
 
   // Get nomenclature breakdown for Daikin model numbers
   const getNomenclatureBreakdown = (model: string) => {
@@ -296,26 +309,84 @@ export default function EnhancedUnitCard({
     ];
   };
 
-  // Handle nomenclature segment changes
+  // Handle nomenclature segment changes with real-time model building
   const handleSegmentChange = (segmentIndex: number, newValue: string) => {
     const updatedSegments = [...nomenclatureSegments];
     updatedSegments[segmentIndex].selectedValue = newValue;
     updatedSegments[segmentIndex].code = newValue;
     
-    // Rebuild model number from segments
-    const newModelNumber = updatedSegments.reduce((model, segment, index) => {
-      if (index === 3) { // Position 4-6 is 3 characters
-        return model + segment.selectedValue;
-      }
-      return model + segment.selectedValue;
-    }, "");
-    
     setNomenclatureSegments(updatedSegments);
-    setDynamicModelNumber(newModelNumber);
     
-    // Trigger model update if callback provided
-    if (onSpecificationUpdate) {
-      onSpecificationUpdate(newModelNumber, { /* updated specs based on new model */ });
+    // Convert nomenclature segments to BuildModelRequest
+    const buildRequest = convertSegmentsToBuildRequest(updatedSegments);
+    
+    if (buildRequest) {
+      setModelBuildError(null);
+      
+      // Clear any existing cleanup function
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+      
+      // Use the real-time model builder with proper cleanup
+      cleanupRef.current = modelBuilder.buildModel(buildRequest, (response) => {
+        if (response && response.success && response.result) {
+          const newModelNumber = response.result.model;
+          setDynamicModelNumber(newModelNumber);
+          
+          // Trigger specification update callback if provided
+          if (onSpecificationUpdate) {
+            onSpecificationUpdate(newModelNumber, response.result.specifications);
+          }
+        } else {
+          // Fallback to manual concatenation if API fails
+          const fallbackModel = updatedSegments.reduce((model, segment, index) => {
+            if (index === 3) { // Position 4-6 is 3 characters
+              return model + segment.selectedValue;
+            }
+            return model + segment.selectedValue;
+          }, "");
+          
+          setDynamicModelNumber(fallbackModel);
+          setModelBuildError(response?.errors?.[0] || "Model built with fallback method");
+        }
+      });
+    }
+  };
+  
+  // Convert nomenclature segments to BuildModelRequest format
+  const convertSegmentsToBuildRequest = (segments: typeof nomenclatureSegments): BuildModelRequest | null => {
+    if (!family || segments.length < 6) return null;
+    
+    try {
+      // Extract values from segments
+      const capacityCode = segments[3]?.selectedValue || "036";
+      const voltageCode = segments[4]?.selectedValue || "3";
+      const fanDriveCode = segments[5]?.selectedValue || "D";
+      
+      // Convert capacity code to tonnage
+      const capacityMapping: Record<string, number> = {
+        "036": 3.0, "048": 4.0, "060": 5.0, "072": 6.0,
+        "090": 7.5, "102": 8.5, "120": 10.0, "150": 12.5,
+        "180": 15.0, "240": 20.0, "300": 25.0
+      };
+      
+      const tonnage = capacityMapping[capacityCode] || 3.0;
+      
+      const buildRequest: BuildModelRequest = {
+        family: family as DaikinFamilyKeys,
+        tons: tonnage,
+        voltage: voltageCode,
+        fan_drive: fanDriveCode,
+        controls: "A", // Default
+        refrig_sys: "A", // Default
+        heat_exchanger: "X" // Default
+      };
+      
+      return buildRequest;
+    } catch (error) {
+      console.error("Error converting segments to build request:", error);
+      return null;
     }
   };
 
@@ -500,9 +571,22 @@ export default function EnhancedUnitCard({
                   <div className="bg-muted/50 p-3 rounded-md mb-4">
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground mb-1">Current Model Number</p>
-                      <p className="text-lg font-mono font-bold text-primary" data-testid="text-dynamic-model-number">
-                        {dynamicModelNumber}
-                      </p>
+                      <div className="flex items-center justify-center gap-2">
+                        {modelBuilder.isBuilding && (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" data-testid="loader-model-building" />
+                        )}
+                        <p className="text-lg font-mono font-bold text-primary" data-testid="text-dynamic-model-number">
+                          {dynamicModelNumber}
+                        </p>
+                      </div>
+                      {modelBuildError && (
+                        <div className="flex items-center justify-center gap-1 mt-2">
+                          <AlertCircle className="h-3 w-3 text-orange-500" />
+                          <p className="text-xs text-orange-600" data-testid="text-model-build-error">
+                            {modelBuildError}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -522,6 +606,7 @@ export default function EnhancedUnitCard({
                               value={segment.selectedValue} 
                               onValueChange={(value) => handleSegmentChange(index, value)}
                               data-testid={`select-segment-${index}`}
+                              disabled={modelBuilder.isBuilding}
                             >
                               <SelectTrigger className="w-full">
                                 <SelectValue />
@@ -552,6 +637,24 @@ export default function EnhancedUnitCard({
                     ))}
                   </div>
                   
+                  {/* Model Building Status */}
+                  {(modelBuilder.isBuilding || modelBuildError) && (
+                    <div className="mt-4 p-2 rounded-md border">
+                      {modelBuilder.isBuilding && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Building model number...</span>
+                        </div>
+                      )}
+                      {modelBuildError && !modelBuilder.isBuilding && (
+                        <div className="flex items-center gap-2 text-sm text-orange-600">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>{modelBuildError}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   {/* Model Building Actions */}
                   {isEditable && (
                     <div className="flex gap-2 mt-4">
@@ -564,6 +667,7 @@ export default function EnhancedUnitCard({
                           }
                         }}
                         data-testid="button-apply-model-changes"
+                        disabled={modelBuilder.isBuilding}
                       >
                         <Settings className="h-3 w-3 mr-1" />
                         Apply Changes
@@ -574,8 +678,10 @@ export default function EnhancedUnitCard({
                         onClick={() => {
                           setNomenclatureSegments(getNomenclatureBreakdown(unit.modelNumber));
                           setDynamicModelNumber(unit.modelNumber);
+                          setModelBuildError(null);
                         }}
                         data-testid="button-reset-model"
+                        disabled={modelBuilder.isBuilding}
                       >
                         Reset
                       </Button>

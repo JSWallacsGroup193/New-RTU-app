@@ -13,9 +13,13 @@ import {
   submitCorrectionRequestSchema,
   submitMatchFeedbackRequestSchema,
   parseCombinedVoltage,
-  SpecSearchInputLegacy
+  SpecSearchInputLegacy,
+  buildModelRequestSchema,
+  BuildModelRequest,
+  BuildModelResponse
 } from "@shared/schema";
 import { ALL_MODEL_SPECIFICATIONS } from "./data/daikinCatalog";
+import { ModelBuilder } from "./services/modelBuilder";
 import { z } from "zod";
 import { 
   handleValidationError,
@@ -28,6 +32,7 @@ const parser = new HVACModelParser({ enableLearning: true, storage });
 const matcher = new DaikinMatcher();
 const learningService = new LearningService(storage);
 const learningAnalytics = new LearningAnalytics(storage);
+const modelBuilder = new ModelBuilder();
 
 // Request validation schemas
 const decodeRequestSchema = z.object({
@@ -220,6 +225,24 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error fetching specifications:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Build model from specifications endpoint
+  app.post("/api/build-model", (req, res) => {
+    try {
+      const buildRequest = buildModelRequestSchema.parse(req.body);
+      
+      const buildResponse: BuildModelResponse = modelBuilder.buildModel(buildRequest);
+      
+      res.json(buildResponse);
+      
+    } catch (error) {
+      console.error("Error in build-model:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
+      return handleInternalError(res, "Failed to build model", error);
     }
   });
 

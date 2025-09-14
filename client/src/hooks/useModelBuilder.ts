@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { buildModel } from "@/lib/api";
 import { BuildModelRequest, BuildModelResponse, DaikinFamilyKeys } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 export function useModelBuilder() {
   const { toast } = useToast();
@@ -37,10 +38,20 @@ export function useModelBuilder() {
 
 export function useRealTimeModelBuilder() {
   const modelBuilder = useModelBuilder();
+  const [isDebouncing, setIsDebouncing] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  const buildModelWithDebounce = (params: BuildModelRequest, callback?: (response: BuildModelResponse | null) => void) => {
+  const buildModelWithDebounce = useCallback((params: BuildModelRequest, callback?: (response: BuildModelResponse | null) => void) => {
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    setIsDebouncing(true);
+    
     // Add a small delay to debounce rapid changes
-    const timeoutId = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
+      setIsDebouncing(false);
       modelBuilder.mutate(params, {
         onSuccess: (data) => {
           callback?.(data);
@@ -51,12 +62,28 @@ export function useRealTimeModelBuilder() {
       });
     }, 300); // 300ms debounce
 
-    return () => clearTimeout(timeoutId);
-  };
+    // Return cleanup function
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+        setIsDebouncing(false);
+      }
+    };
+  }, [modelBuilder]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return {
     buildModel: buildModelWithDebounce,
-    isBuilding: modelBuilder.isPending,
+    isBuilding: modelBuilder.isPending || isDebouncing,
     error: modelBuilder.error,
     reset: modelBuilder.reset,
     lastResponse: modelBuilder.data,
