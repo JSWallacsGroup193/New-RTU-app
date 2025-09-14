@@ -2,10 +2,11 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { UserOptions } from 'jspdf-autotable';
 
-// Extend jsPDF type to include autoTable
+// Extend jsPDF type to include autoTable method
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: UserOptions) => jsPDF;
+    lastAutoTable: { finalY: number };
   }
 }
 
@@ -48,14 +49,46 @@ interface DaikinReplacement {
   weight?: number;
 }
 
+// Nomenclature segment interface for detailed breakdown
+interface NomenclatureSegment {
+  position: string;
+  code: string;
+  description: string;
+  options?: Array<{ value: string; description: string; }>;
+  selectedValue?: string;
+}
+
+// Enhanced search criteria interface
+interface SearchCriteria {
+  systemType: string;
+  tonnage: string;
+  voltage: string;
+  phases?: string;
+  efficiency?: string;
+  heatingBTU?: number;
+  heatKitKW?: number;
+  gasCategory?: string;
+  maxSoundLevel?: number;
+  refrigerant?: string;
+  driveType?: string;
+}
+
+// Enhanced export options with comprehensive features
 interface ExportOptions {
   includeProjectInfo?: boolean;
   includeEnvironmentalBenefits?: boolean;
   includeCostAnalysis?: boolean;
+  includeNomenclatureBreakdown?: boolean;
+  includeSearchCriteria?: boolean;
+  includeNotesSection?: boolean;
   technician?: string;
   customer?: string;
   project?: string;
+  projectDate?: string;
   notes?: string;
+  technicianNotes?: string;
+  searchCriteria?: SearchCriteria;
+  nomenclatureSegments?: NomenclatureSegment[];
 }
 
 export class PDFService {
@@ -75,25 +108,49 @@ export class PDFService {
     });
   }
 
-  // Add professional header with Daikin branding
-  private addHeader(title: string): void {
+  // Helper method to call autoTable using the instance method (most robust approach)
+  private generateTable(options: UserOptions): void {
+    // Set default startY if not provided
+    if (!options.startY) {
+      options.startY = this.currentY;
+    }
+    
+    // Use the autoTable method directly on the jsPDF instance
+    // This approach ensures maximum compatibility with the jsPDF-autoTable library
+    this.doc.autoTable(options);
+    
+    // Update currentY from the lastAutoTable finalY position
+    if (this.doc.lastAutoTable) {
+      this.currentY = this.doc.lastAutoTable.finalY;
+    }
+  }
+
+  // Add professional header with enhanced project details
+  private addHeader(title: string, options: ExportOptions = {}): void {
     // Company header background
     this.doc.setFillColor(0, 114, 198); // Daikin blue
-    this.doc.rect(0, 0, this.pageWidth, 25, 'F');
+    this.doc.rect(0, 0, this.pageWidth, 30, 'F');
     
     // Title
     this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(20);
+    this.doc.setFontSize(18);
     this.doc.setTextColor(255, 255, 255);
-    this.doc.text(title, this.marginLeft, 15);
+    this.doc.text(title, this.marginLeft, 12);
     
     // Subtitle
-    this.doc.setFontSize(10);
-    this.doc.text('Professional HVAC Equipment Replacement Analysis', this.marginLeft, 20);
+    this.doc.setFontSize(9);
+    this.doc.text('Professional HVAC Equipment Replacement Analysis', this.marginLeft, 18);
+    
+    // Project name (if provided)
+    if (options.project) {
+      this.doc.setFontSize(10);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.text(`Project: ${options.project}`, this.marginLeft, 24);
+    }
     
     // Date and time
     const now = new Date();
-    const dateStr = now.toLocaleDateString('en-US', { 
+    const dateStr = options.projectDate || now.toLocaleDateString('en-US', { 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
@@ -103,9 +160,21 @@ export class PDFService {
       minute: '2-digit' 
     });
     
-    this.doc.text(`Generated: ${dateStr} at ${timeStr}`, this.pageWidth - this.marginRight - 60, 15);
+    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFontSize(8);
+    this.doc.text(`Generated: ${dateStr} at ${timeStr}`, this.pageWidth - this.marginRight - 55, 12);
     
-    this.currentY = 35;
+    // Technician info (if provided)
+    if (options.technician) {
+      this.doc.text(`Technician: ${options.technician}`, this.pageWidth - this.marginRight - 55, 18);
+    }
+    
+    // Customer info (if provided)
+    if (options.customer) {
+      this.doc.text(`Customer: ${options.customer}`, this.pageWidth - this.marginRight - 55, 24);
+    }
+    
+    this.currentY = 40;
   }
 
   // Add footer with page numbers and professional disclaimer
@@ -136,6 +205,75 @@ export class PDFService {
       this.doc.addPage();
       this.currentY = 20;
     }
+  }
+
+  // Add enhanced search criteria section
+  private addSearchCriteria(options: ExportOptions): void {
+    if (!options.includeSearchCriteria || !options.searchCriteria) return;
+
+    this.checkNewPage(50);
+    
+    // Section header
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(14);
+    this.doc.setTextColor(0, 114, 198);
+    this.doc.text('Original Search Criteria & Requirements', this.marginLeft, this.currentY);
+    this.currentY += 15;
+
+    const criteria = options.searchCriteria;
+    const searchData = [
+      ['Requirement', 'Specification', 'Notes'],
+      ['System Type', criteria.systemType, 'Primary HVAC system classification'],
+      ['Tonnage', `${criteria.tonnage} Tons`, 'Cooling capacity requirement'],
+      ['Voltage', criteria.voltage, 'Electrical supply specification'],
+      ['Phases', criteria.phases || 'Not specified', 'Electrical configuration'],
+      ['Efficiency Level', criteria.efficiency || 'Standard', 'Energy efficiency preference']
+    ];
+
+    // Add conditional requirements
+    if (criteria.heatingBTU) {
+      searchData.push(['Heating BTU', `${criteria.heatingBTU.toLocaleString()} BTU/hr`, 'Heating capacity requirement']);
+    }
+    if (criteria.gasCategory) {
+      searchData.push(['Gas Type', criteria.gasCategory, 'Fuel type for Gas/Electric systems']);
+    }
+    if (criteria.maxSoundLevel) {
+      searchData.push(['Max Sound Level', `${criteria.maxSoundLevel} dB`, 'Noise level limitation']);
+    }
+    if (criteria.refrigerant) {
+      searchData.push(['Refrigerant Type', criteria.refrigerant, 'Preferred refrigerant']);
+    }
+    if (criteria.driveType) {
+      searchData.push(['Drive Type', criteria.driveType, 'Motor control preference']);
+    }
+
+    this.generateTable({
+      startY: this.currentY,
+      head: [searchData[0]],
+      body: searchData.slice(1),
+      theme: 'grid',
+      headStyles: {
+        fillColor: [0, 114, 198],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      bodyStyles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 45 },
+        1: { cellWidth: 50, textColor: [0, 114, 198], fontStyle: 'bold' },
+        2: { cellWidth: 85, fontSize: 8, textColor: [100, 100, 100] }
+      },
+      alternateRowStyles: {
+        fillColor: [248, 249, 250]
+      },
+      margin: { left: this.marginLeft, right: this.marginRight }
+    });
+
+    this.currentY += 15;
   }
 
   // Add project information section
@@ -205,6 +343,88 @@ export class PDFService {
     this.currentY += 10;
   }
 
+  // Generate enhanced replacement recommendations table with sizing emphasis
+  private generateReplacementTable(replacements: DaikinReplacement[], original?: OriginalUnit): void {
+    this.checkNewPage(100);
+
+    // Section header
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(14);
+    this.doc.setTextColor(0, 114, 198);
+    this.doc.text('Daikin Replacement Recommendations', this.marginLeft, this.currentY);
+    this.currentY += 8;
+
+    // Add sizing explanation
+    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFontSize(9);
+    this.doc.setTextColor(100, 100, 100);
+    this.doc.text('Direct Match = Same capacity | Up Size = Larger capacity | Down Size = Smaller capacity', this.marginLeft, this.currentY);
+    this.currentY += 15;
+
+    // Group replacements by size match
+    const directMatches = replacements.filter(r => r.sizeMatch === 'direct');
+    const upSizes = replacements.filter(r => r.sizeMatch === 'larger');
+    const downSizes = replacements.filter(r => r.sizeMatch === 'smaller');
+
+    // Create sections for each match type
+    const sections = [
+      { title: 'Direct Match Replacements (Recommended)', units: directMatches, color: [34, 139, 34] as [number, number, number] },
+      { title: 'Up-Size Options (Higher Capacity)', units: upSizes, color: [255, 140, 0] as [number, number, number] },
+      { title: 'Down-Size Options (Lower Capacity)', units: downSizes, color: [220, 20, 60] as [number, number, number] }
+    ];
+
+    sections.forEach((section) => {
+      if (section.units.length > 0) {
+        // Section title
+        this.doc.setFont('helvetica', 'bold');
+        this.doc.setFontSize(12);
+        this.doc.setTextColor(section.color[0], section.color[1], section.color[2]);
+        this.doc.text(section.title, this.marginLeft, this.currentY);
+        this.currentY += 10;
+
+        // Prepare table data
+        const tableData = section.units.map(unit => [
+          unit.modelNumber,
+          this.formatBTU(unit.btuCapacity),
+          `${unit.seerRating || 'N/A'}`,
+          `${unit.soundLevel || 'N/A'} dB`,
+          unit.refrigerant || 'R-32',
+          unit.driveType || 'Variable',
+          this.getSizeMatchIndicator(unit.sizeMatch)
+        ]);
+
+        this.generateTable({
+          startY: this.currentY,
+          head: [['Model Number', 'Capacity', 'SEER', 'Sound', 'Refrigerant', 'Drive', 'Match Type']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: {
+            fillColor: section.color,
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 9
+          },
+          bodyStyles: {
+            fontSize: 8,
+            cellPadding: 2
+          },
+          columnStyles: {
+            0: { fontStyle: 'bold', cellWidth: 30 },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 20 },
+            3: { cellWidth: 20 },
+            4: { cellWidth: 25 },
+            5: { cellWidth: 25 },
+            6: { cellWidth: 25, textColor: [section.color[0], section.color[1], section.color[2]], fontStyle: 'bold' }
+          },
+          margin: { left: this.marginLeft, right: this.marginRight }
+        });
+
+        this.currentY += 10;
+      }
+    });
+  }
+
   // Generate comparison table for original vs replacement units
   private generateComparisonTable(original: OriginalUnit, replacement: DaikinReplacement): void {
     this.checkNewPage(80);
@@ -240,7 +460,7 @@ export class PDFService {
     ];
 
     // Generate the table
-    this.doc.autoTable({
+    this.generateTable({
       startY: this.currentY,
       head: [comparisonData[0]],
       body: comparisonData.slice(1),
@@ -267,7 +487,65 @@ export class PDFService {
       margin: { left: this.marginLeft, right: this.marginRight }
     });
 
-    this.currentY = (this.doc as any).lastAutoTable.finalY + 15;
+    this.currentY += 15;
+  }
+
+  // Add nomenclature breakdown section
+  private addNomenclatureBreakdown(unit: DaikinReplacement, options: ExportOptions): void {
+    if (!options.includeNomenclatureBreakdown || !options.nomenclatureSegments) return;
+
+    this.checkNewPage(80);
+    
+    // Section header
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(14);
+    this.doc.setTextColor(0, 114, 198);
+    this.doc.text(`Nomenclature Breakdown - ${unit.modelNumber}`, this.marginLeft, this.currentY);
+    this.currentY += 8;
+
+    // Add explanation
+    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFontSize(9);
+    this.doc.setTextColor(100, 100, 100);
+    this.doc.text('Each position in the model number represents specific technical characteristics', this.marginLeft, this.currentY);
+    this.currentY += 15;
+
+    // Prepare nomenclature data
+    const nomenclatureData = options.nomenclatureSegments.map(segment => [
+      segment.position,
+      segment.code,
+      segment.description,
+      segment.options?.find(opt => opt.value === segment.selectedValue)?.description || segment.description
+    ]);
+
+    this.generateTable({
+      startY: this.currentY,
+      head: [['Position', 'Code', 'Category', 'Description']],
+      body: nomenclatureData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [0, 114, 198],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      bodyStyles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 30 },
+        1: { cellWidth: 20, textColor: [0, 114, 198], fontStyle: 'bold' },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 80, fontSize: 8 }
+      },
+      alternateRowStyles: {
+        fillColor: [248, 249, 250]
+      },
+      margin: { left: this.marginLeft, right: this.marginRight }
+    });
+
+    this.currentY += 15;
   }
 
   // Add detailed specifications section
@@ -303,7 +581,7 @@ export class PDFService {
     });
 
     if (specs.length > 0) {
-      this.doc.autoTable({
+      this.generateTable({
         startY: this.currentY,
         body: specs,
         theme: 'striped',
@@ -318,8 +596,69 @@ export class PDFService {
         margin: { left: this.marginLeft, right: this.marginRight }
       });
 
-      this.currentY = (this.doc as any).lastAutoTable.finalY + 15;
+      this.currentY += 15;
     }
+  }
+
+  // Add technician notes section
+  private addNotesSection(options: ExportOptions): void {
+    if (!options.includeNotesSection) return;
+
+    this.checkNewPage(60);
+    
+    // Section header
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(14);
+    this.doc.setTextColor(0, 114, 198);
+    this.doc.text('Technician Notes & Comments', this.marginLeft, this.currentY);
+    this.currentY += 15;
+
+    // Pre-filled notes if provided
+    if (options.technicianNotes) {
+      this.doc.setFont('helvetica', 'normal');
+      this.doc.setFontSize(10);
+      this.doc.setTextColor(0, 0, 0);
+      
+      // Split notes into lines and handle wrapping
+      const notes = options.technicianNotes;
+      const lines = this.doc.splitTextToSize(notes, this.contentWidth - 10);
+      
+      lines.forEach((line: string, index: number) => {
+        this.doc.text(line, this.marginLeft + 5, this.currentY + (index * 5));
+      });
+      
+      this.currentY += (lines.length * 5) + 10;
+    }
+
+    // Add blank lines for field notes
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(10);
+    this.doc.text('Field Notes:', this.marginLeft, this.currentY);
+    this.currentY += 8;
+
+    // Draw lines for writing notes
+    this.doc.setDrawColor(200, 200, 200);
+    for (let i = 0; i < 8; i++) {
+      this.doc.line(this.marginLeft, this.currentY + (i * 6), this.pageWidth - this.marginRight, this.currentY + (i * 6));
+    }
+    
+    this.currentY += 50;
+
+    // Add signature section
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(10);
+    this.doc.setTextColor(0, 0, 0);
+    
+    const signatureY = this.currentY;
+    this.doc.text('Technician Signature:', this.marginLeft, signatureY);
+    this.doc.text('Date:', this.marginLeft + 90, signatureY);
+    
+    // Draw signature lines
+    this.doc.setDrawColor(0, 0, 0);
+    this.doc.line(this.marginLeft + 45, signatureY + 2, this.marginLeft + 85, signatureY + 2);
+    this.doc.line(this.marginLeft + 105, signatureY + 2, this.marginLeft + 145, signatureY + 2);
+    
+    this.currentY += 20;
   }
 
   // Add energy cost savings analysis
@@ -350,7 +689,7 @@ export class PDFService {
       ['Payback Period', '3-5 years', 'Typical ROI timeframe']
     ];
 
-    this.doc.autoTable({
+    this.generateTable({
       startY: this.currentY,
       head: [costData[0]],
       body: costData.slice(1),
@@ -372,7 +711,7 @@ export class PDFService {
       margin: { left: this.marginLeft, right: this.marginRight }
     });
 
-    this.currentY = (this.doc as any).lastAutoTable.finalY + 10;
+    this.currentY += 10;
     
     // Add disclaimer
     this.doc.setFont('helvetica', 'italic');
@@ -381,6 +720,69 @@ export class PDFService {
     this.doc.text('*Savings calculations are estimates based on typical usage patterns and average energy costs.', this.marginLeft, this.currentY);
     this.doc.text('Actual savings may vary based on local utility rates, usage patterns, and installation conditions.', this.marginLeft, this.currentY + 5);
     this.currentY += 20;
+  }
+
+  // Export comprehensive specification report
+  public exportSpecificationReport(
+    replacements: DaikinReplacement[],
+    options: ExportOptions = {}
+  ): void {
+    this.doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    this.currentY = 20;
+
+    // Add enhanced header with project details
+    this.addHeader('HVAC Equipment Specification Report', options);
+
+    // Add search criteria section
+    if (options.includeSearchCriteria !== false) {
+      this.addSearchCriteria(options);
+    }
+
+    // Add project information
+    this.addProjectInfo(options);
+
+    // Add replacement recommendations table with Direct/Up/Down sizing
+    this.generateReplacementTable(replacements);
+
+    // Add detailed specifications for each unit
+    replacements.forEach((replacement, index) => {
+      if (index > 0 || this.currentY > 200) {
+        this.doc.addPage();
+        this.currentY = 20;
+      }
+      
+      this.addDetailedSpecifications(replacement);
+      
+      // Add nomenclature breakdown
+      if (options.includeNomenclatureBreakdown !== false) {
+        this.addNomenclatureBreakdown(replacement, options);
+      }
+    });
+
+    // Add environmental benefits
+    if (options.includeEnvironmentalBenefits !== false) {
+      this.addEnvironmentalBenefits();
+    }
+
+    // Add notes section
+    if (options.includeNotesSection !== false) {
+      this.addNotesSection(options);
+    }
+
+    // Add footer
+    this.addFooter();
+
+    // Generate filename
+    const timestamp = new Date().toISOString().split('T')[0];
+    const projectName = options.project ? `_${options.project.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    const filename = `HVAC_Specification_Report${projectName}_${timestamp}.pdf`;
+
+    // Download the PDF
+    this.doc.save(filename);
   }
 
   // Export single comparison report
@@ -396,8 +798,13 @@ export class PDFService {
     });
     this.currentY = 20;
 
-    // Add header
-    this.addHeader('HVAC Equipment Replacement Report');
+    // Add enhanced header
+    this.addHeader('HVAC Equipment Replacement Report', options);
+
+    // Add search criteria if available
+    if (options.includeSearchCriteria !== false && options.searchCriteria) {
+      this.addSearchCriteria(options);
+    }
 
     // Add project information
     this.addProjectInfo(options);
@@ -407,6 +814,11 @@ export class PDFService {
 
     // Add detailed specifications
     this.addDetailedSpecifications(replacement);
+
+    // Add nomenclature breakdown
+    if (options.includeNomenclatureBreakdown !== false) {
+      this.addNomenclatureBreakdown(replacement, options);
+    }
 
     // Add environmental benefits
     if (options.includeEnvironmentalBenefits !== false) {
@@ -418,58 +830,9 @@ export class PDFService {
       this.addCostAnalysis(original, replacement);
     }
 
-    // Add footer
-    this.addFooter();
-
-    // Generate filename
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `HVAC_Replacement_Report_${replacement.modelNumber}_${timestamp}.pdf`;
-
-    // Download the PDF
-    this.doc.save(filename);
-  }
-
-  // Export bulk comparison report for multiple units
-  public exportBulkComparisonReport(
-    comparisons: Array<{ original: OriginalUnit; replacement: DaikinReplacement }>,
-    options: ExportOptions = {}
-  ): void {
-    this.doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-    this.currentY = 20;
-
-    // Add header
-    this.addHeader('Multi-Unit HVAC Replacement Analysis');
-
-    // Add project information
-    this.addProjectInfo(options);
-
-    // Add executive summary
-    this.addExecutiveSummary(comparisons);
-
-    // Add each comparison
-    comparisons.forEach((comparison, index) => {
-      if (index > 0) {
-        this.doc.addPage();
-        this.currentY = 20;
-      }
-      
-      this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(16);
-      this.doc.setTextColor(0, 114, 198);
-      this.doc.text(`Unit ${index + 1} Analysis`, this.marginLeft, this.currentY);
-      this.currentY += 15;
-
-      this.generateComparisonTable(comparison.original, comparison.replacement);
-      this.addDetailedSpecifications(comparison.replacement);
-    });
-
-    // Add environmental benefits
-    if (options.includeEnvironmentalBenefits !== false) {
-      this.addEnvironmentalBenefits();
+    // Add notes section
+    if (options.includeNotesSection !== false) {
+      this.addNotesSection(options);
     }
 
     // Add footer
@@ -477,139 +840,97 @@ export class PDFService {
 
     // Generate filename
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `HVAC_Multi_Unit_Report_${comparisons.length}Units_${timestamp}.pdf`;
+    const projectName = options.project ? `_${options.project.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    const filename = `HVAC_Replacement_Report${projectName}_${timestamp}.pdf`;
 
     // Download the PDF
     this.doc.save(filename);
   }
 
-  // Add executive summary for bulk reports
-  private addExecutiveSummary(comparisons: Array<{ original: OriginalUnit; replacement: DaikinReplacement }>): void {
-    this.checkNewPage(60);
-    
-    this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(14);
-    this.doc.setTextColor(0, 114, 198);
-    this.doc.text('Executive Summary', this.marginLeft, this.currentY);
-    this.currentY += 15;
-
-    const totalCapacity = comparisons.reduce((sum, comp) => sum + comp.replacement.btuCapacity, 0);
-    const avgSeerImprovement = this.calculateAvgSeerImprovement(comparisons);
-    const totalAnnualSavings = this.calculateTotalSavings(comparisons);
-
-    const summaryData = [
-      ['Summary Item', 'Value'],
-      ['Total Units', comparisons.length.toString()],
-      ['Total Capacity', this.formatBTU(totalCapacity)],
-      ['Avg. SEER Improvement', `${avgSeerImprovement.toFixed(1)}%`],
-      ['Est. Total Annual Savings', `$${totalAnnualSavings.toFixed(0)}`],
-      ['Environmental Benefit', 'R-32 Refrigerant (68% lower GWP)']
-    ];
-
-    this.doc.autoTable({
-      startY: this.currentY,
-      head: [summaryData[0]],
-      body: summaryData.slice(1),
-      theme: 'grid',
-      headStyles: {
-        fillColor: [0, 114, 198],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold'
-      },
-      bodyStyles: {
-        fontSize: 10,
-        cellPadding: 4
-      },
-      columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 90 },
-        1: { cellWidth: 90, textColor: [0, 114, 198], fontStyle: 'bold' }
-      },
-      margin: { left: this.marginLeft, right: this.marginRight }
-    });
-
-    this.currentY = (this.doc as any).lastAutoTable.finalY + 20;
-  }
-
-  // Utility methods
-  private getSpecValue(specs: Array<{label: string, value: string, unit?: string}>, label: string): string | undefined {
-    const spec = specs.find(s => s.label.toLowerCase().includes(label.toLowerCase()));
+  // Helper method to get specification value
+  private getSpecValue(specifications: Array<{label: string; value: string; unit?: string}>, label: string): string | undefined {
+    const spec = specifications.find(s => s.label.toLowerCase().includes(label.toLowerCase()));
     return spec?.value;
   }
 
+  // Helper method to format BTU capacity
   private formatBTU(btu: number): string {
-    return (btu / 1000).toFixed(0) + 'K BTU';
+    if (btu >= 1000000) {
+      return `${(btu / 1000000).toFixed(1)}M BTU/hr`;
+    } else if (btu >= 1000) {
+      return `${(btu / 1000).toFixed(0)}K BTU/hr`;
+    }
+    return `${btu.toLocaleString()} BTU/hr`;
+  }
+
+  // Helper method to get size match indicator
+  private getSizeMatchIndicator(sizeMatch: string): string {
+    switch (sizeMatch) {
+      case 'direct': return 'Direct Match';
+      case 'larger': return 'Up-Size';
+      case 'smaller': return 'Down-Size';
+      default: return 'Unknown';
+    }
+  }
+
+  // Helper methods for comparison improvements
+  private getSystemMatch(original: string, replacement: string): string {
+    return original === replacement ? 'Perfect Match' : 'Different Type';
   }
 
   private getSizeMatch(sizeMatch: string): string {
     switch (sizeMatch) {
-      case 'direct': return '✓ Perfect Match';
-      case 'larger': return '↑ Oversized';
-      case 'smaller': return '↓ Undersized';
-      default: return '—';
+      case 'direct': return 'Same Capacity';
+      case 'larger': return 'Higher Capacity';
+      case 'smaller': return 'Lower Capacity';
+      default: return 'Unknown';
     }
   }
 
-  private getSystemMatch(original: string, replacement: string): string {
-    return original === replacement ? '✓ Match' : `${original} → ${replacement}`;
-  }
-
   private getVoltageMatch(original: string, replacement: string): string {
-    return original === replacement ? '✓ Match' : `${original} → ${replacement}`;
+    return original === replacement ? 'Compatible' : 'Check Wiring';
   }
 
   private getPhaseMatch(original: string, replacement: string): string {
-    return original === replacement ? '✓ Match' : `${original} → ${replacement}`;
+    return original === replacement ? 'Compatible' : 'Electrical Upgrade';
   }
 
-  private getEfficiencyImprovement(original: string | number, replacement: string | number): string {
-    const origNum = typeof original === 'string' ? parseFloat(original) : original;
-    const replNum = typeof replacement === 'string' ? parseFloat(replacement) : replacement;
+  private getEfficiencyImprovement(original: string, replacement: string): string {
+    const origNum = parseFloat(original);
+    const replNum = parseFloat(replacement);
     
-    if (isNaN(origNum) || isNaN(replNum)) return '—';
+    if (isNaN(origNum) || isNaN(replNum)) return 'Check Specs';
     
-    const improvement = ((replNum / origNum - 1) * 100);
-    return improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+    const improvement = ((replNum - origNum) / origNum) * 100;
+    
+    if (improvement > 0) {
+      return `+${improvement.toFixed(1)}% Better`;
+    } else if (improvement < 0) {
+      return `${improvement.toFixed(1)}% Lower`;
+    } else {
+      return 'Same Rating';
+    }
   }
 
+  // Calculate annual energy savings
   private calculateAnnualSavings(originalSeer: number, newSeer: number, capacity: number): number {
-    const annualKwh = capacity * 2000 / 1000; // Assume 2000 hours of operation
-    const originalConsumption = annualKwh / originalSeer;
-    const newConsumption = annualKwh / newSeer;
-    const kwhSaved = originalConsumption - newConsumption;
-    return kwhSaved * 0.12; // Assume $0.12 per kWh
-  }
-
-  private calculateAvgSeerImprovement(comparisons: Array<{ original: OriginalUnit; replacement: DaikinReplacement }>): number {
-    let totalImprovement = 0;
-    let count = 0;
-
-    comparisons.forEach(comp => {
-      const originalSeer = parseFloat(this.getSpecValue(comp.original.specifications, 'SEER') || '12');
-      const replacementSeer = comp.replacement.seerRating || 16;
-      const improvement = ((replacementSeer / originalSeer - 1) * 100);
-      totalImprovement += improvement;
-      count++;
-    });
-
-    return count > 0 ? totalImprovement / count : 0;
-  }
-
-  private calculateTotalSavings(comparisons: Array<{ original: OriginalUnit; replacement: DaikinReplacement }>): number {
-    return comparisons.reduce((total, comp) => {
-      const originalSeer = parseFloat(this.getSpecValue(comp.original.specifications, 'SEER') || '12');
-      const replacementSeer = comp.replacement.seerRating || 16;
-      const savings = this.calculateAnnualSavings(originalSeer, replacementSeer, comp.replacement.btuCapacity);
-      return total + savings;
-    }, 0);
+    const annualHours = 2000; // Typical annual cooling hours
+    const energyCost = 0.12; // Average cost per kWh
+    
+    const originalKw = capacity / (originalSeer * 1000);
+    const newKw = capacity / (newSeer * 1000);
+    
+    const annualSavingsKwh = (originalKw - newKw) * annualHours;
+    return annualSavingsKwh * energyCost;
   }
 }
 
-// Export convenience functions
+// Static export functions for backward compatibility
 export const exportSingleComparison = (
   original: OriginalUnit,
   replacement: DaikinReplacement,
   options: ExportOptions = {}
-) => {
+): void => {
   const pdfService = new PDFService();
   pdfService.exportComparisonReport(original, replacement, options);
 };
@@ -617,9 +938,18 @@ export const exportSingleComparison = (
 export const exportBulkComparison = (
   comparisons: Array<{ original: OriginalUnit; replacement: DaikinReplacement }>,
   options: ExportOptions = {}
-) => {
+): void => {
   const pdfService = new PDFService();
-  pdfService.exportBulkComparisonReport(comparisons, options);
+  
+  // Create a comprehensive report with all comparisons
+  const replacements = comparisons.map(c => c.replacement);
+  
+  // Use the specification report but enhance it for bulk comparisons
+  pdfService.exportSpecificationReport(replacements, {
+    ...options,
+    includeSearchCriteria: options.includeSearchCriteria !== false,
+    includeEnvironmentalBenefits: options.includeEnvironmentalBenefits !== false,
+    includeCostAnalysis: options.includeCostAnalysis !== false,
+    includeNotesSection: options.includeNotesSection !== false
+  });
 };
-
-export default PDFService;

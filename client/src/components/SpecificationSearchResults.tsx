@@ -598,8 +598,23 @@ export default function SpecificationSearchResults({
     try {
       const selectedEnhancedUnits = filteredAndSortedUnits.filter(unit => selectedUnits.has(unit.id));
       
-      // Create "original unit" from search parameters for comparison
+      // Create enhanced search criteria from search parameters
       const { voltage: parsedVoltage, phases: parsedPhases } = parseCombinedVoltage(searchParams.voltage);
+      const searchCriteria = {
+        systemType: searchParams.systemType,
+        tonnage: searchParams.tonnage,
+        voltage: searchParams.voltage,
+        phases: parsedPhases,
+        efficiency: searchParams.efficiency,
+        heatingBTU: searchParams.heatingBTU,
+        heatKitKW: searchParams.heatKitKW,
+        gasCategory: searchParams.gasCategory,
+        maxSoundLevel: searchParams.maxSoundLevel,
+        refrigerant: searchParams.refrigerant,
+        driveType: searchParams.driveType
+      };
+      
+      // Create "original unit" from search parameters for comparison
       const originalUnit = {
         modelNumber: "Search Specifications",
         manufacturer: "Various",
@@ -620,46 +635,52 @@ export default function SpecificationSearchResults({
       };
 
       // Convert enhanced units to replacement format
-      const comparisons = selectedEnhancedUnits.map(unit => ({
-        original: originalUnit,
-        replacement: {
-          id: unit.id,
-          modelNumber: unit.modelNumber,
-          systemType: unit.systemType,
-          btuCapacity: unit.btuCapacity,
-          voltage: unit.voltage,
-          phases: unit.phases,
-          sizeMatch: unit.sizeMatch,
-          seerRating: unit.seerRating,
-          eerRating: unit.eerRating,
-          hspfRating: unit.hspfRating,
-          refrigerant: unit.refrigerant,
-          driveType: unit.driveType,
-          soundLevel: unit.soundLevel,
-          dimensions: unit.dimensions,
-          weight: unit.weight,
-          specifications: [
-            { label: "SEER", value: unit.seerRating.toString() },
-            { label: "Refrigerant", value: unit.refrigerant },
-            { label: "Drive Type", value: unit.driveType },
-            { label: "Sound Level", value: unit.soundLevel.toString(), unit: " dB" },
-            { label: "Weight", value: unit.weight.toString(), unit: " lbs" }
-          ]
-        }
+      const replacements = selectedEnhancedUnits.map(unit => ({
+        id: unit.id,
+        modelNumber: unit.modelNumber,
+        systemType: unit.systemType,
+        btuCapacity: unit.btuCapacity,
+        voltage: unit.voltage,
+        phases: unit.phases,
+        sizeMatch: unit.sizeMatch,
+        seerRating: unit.seerRating,
+        eerRating: unit.eerRating,
+        hspfRating: unit.hspfRating,
+        refrigerant: unit.refrigerant,
+        driveType: unit.driveType,
+        soundLevel: unit.soundLevel,
+        dimensions: unit.dimensions,
+        weight: unit.weight,
+        specifications: [
+          { label: "SEER", value: unit.seerRating.toString() },
+          { label: "Refrigerant", value: unit.refrigerant },
+          { label: "Drive Type", value: unit.driveType },
+          { label: "Sound Level", value: unit.soundLevel.toString(), unit: " dB" },
+          { label: "Weight", value: unit.weight.toString(), unit: " lbs" }
+        ]
       }));
 
-      await exportBulkComparison(comparisons, {
+      // Use the new comprehensive specification export
+      const { exportSpecificationReport } = await import('@/lib/pdfService');
+      
+      await exportSpecificationReport(replacements, {
         includeProjectInfo: true,
+        includeSearchCriteria: true,
+        includeNomenclatureBreakdown: true,
         includeEnvironmentalBenefits: true,
-        includeCostAnalysis: true
+        includeNotesSection: true,
+        searchCriteria: searchCriteria,
+        project: "HVAC Specification Search",
+        technician: "Current User",
+        technicianNotes: "Specification search results based on customer requirements. Review recommended units for best match."
       });
 
       toast({
-        title: "Bulk PDF Export Successful",
-        description: `Multi-unit specification report with ${comparisons.length} units has been downloaded.`,
+        title: "Comprehensive PDF Export Successful",
+        description: `Multi-unit specification report with ${replacements.length} units has been downloaded with full nomenclature breakdown and technical details.`,
       });
     } catch (error) {
-      console.error("Bulk export failed:", error);
+      console.error("Specification export failed:", error);
       toast({
         title: "Export Failed",
         description: "There was an error generating the bulk PDF report. Please try again.",
