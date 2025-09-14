@@ -10,6 +10,13 @@ import type {
   InsertLearningMetric
 } from "@shared/schema";
 import type { IStorage } from "../storage";
+import { 
+  PatternValidator, 
+  patternValidator, 
+  validateRegexPattern, 
+  safePatternTest,
+  safePatternMatch
+} from "../utils/patternValidator";
 
 export interface PatternLearningContext {
   corrections: UserCorrection[];
@@ -291,20 +298,58 @@ export class LearningService {
   }
 
   /**
-   * Find matching pattern for a model number
+   * Find matching pattern for a model number using secure pattern validation
    */
   private async findMatchingPattern(
     modelNumber: string, 
     patterns: ManufacturerPattern[]
   ): Promise<ManufacturerPattern | null> {
+    // Sanitize input model number
+    if (!modelNumber || typeof modelNumber !== 'string' || modelNumber.length > 100) {
+      console.warn('Invalid model number provided for pattern matching');
+      return null;
+    }
+    
+    const sanitizedModelNumber = modelNumber.trim().slice(0, 100);
+    
     for (const pattern of patterns) {
       try {
-        const regex = new RegExp(pattern.regexPattern, 'i');
-        if (regex.test(modelNumber)) {
+        // Validate pattern safety before using
+        const validation = validateRegexPattern(pattern.regexPattern, 'i');
+        
+        if (!validation.isValid) {
+          console.warn(`Unsafe regex pattern detected for pattern ${pattern.id}: ${validation.errors.join(', ')}`);
+          // Flag pattern for review
+          if (this.storage.flagPatternForReview) {
+            await this.storage.flagPatternForReview(
+              pattern.id, 
+              `Security validation failed: ${validation.errors.join(', ')}`
+            );
+          }
+          continue;
+        }
+        
+        // Use safe pattern testing with timeout protection
+        const testResult = await safePatternTest(pattern.regexPattern, sanitizedModelNumber, 'i');
+        
+        if (testResult) {
+          // Increment pattern usage for successful match
+          if (this.storage.incrementPatternMatchCount) {
+            await this.storage.incrementPatternMatchCount(pattern.id, true);
+          }
           return pattern;
         }
+        
       } catch (error) {
-        console.warn(`Invalid regex pattern: ${pattern.regexPattern}`);
+        console.error(`Error testing pattern ${pattern.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // Flag problematic pattern
+        if (this.storage.flagPatternForReview) {
+          await this.storage.flagPatternForReview(
+            pattern.id, 
+            `Pattern execution error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
+        }
       }
     }
     return null;
@@ -352,37 +397,79 @@ export class LearningService {
   }
 
   /**
-   * Generate pattern from model numbers using common structure analysis
+   * Generate secure pattern from model numbers using common structure analysis
    */
   private generatePatternFromModelNumbers(modelNumbers: string[]): string {
-    if (modelNumbers.length === 0) return ".*";
+    // Input validation and sanitization
+    if (!Array.isArray(modelNumbers) || modelNumbers.length === 0) {
+      return "^[A-Z0-9]{3,20}$"; // Safe fallback pattern
+    }
     
-    // Find common prefix
-    let commonPrefix = "";
-    let i = 0;
-    while (i < Math.min(...modelNumbers.map(m => m.length))) {
-      const char = modelNumbers[0][i];
-      if (modelNumbers.every(model => model[i] === char)) {
-        commonPrefix += char === '.' ? '\\.' : char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        i++;
-      } else {
-        break;
+    // Sanitize and validate input model numbers
+    const sanitizedModelNumbers = modelNumbers
+      .filter(model => typeof model === 'string' && model.trim().length > 0)
+      .map(model => model.trim().slice(0, 50)) // Limit length
+      .filter(model => /^[A-Z0-9\-_]+$/i.test(model)); // Only allow safe characters
+    
+    if (sanitizedModelNumbers.length === 0) {
+      return "^[A-Z0-9]{3,20}$"; // Safe fallback pattern
+    }
+    
+    // Limit the number of model numbers to analyze (prevent complexity attacks)
+    const limitedModelNumbers = sanitizedModelNumbers.slice(0, 10);
+    
+    try {
+      // Find common prefix with proper escaping
+      let commonPrefix = "";
+      let i = 0;
+      const minLength = Math.min(...limitedModelNumbers.map(m => m.length));
+      
+      while (i < minLength && i < 20) { // Limit prefix analysis
+        const char = limitedModelNumbers[0][i];
+        if (limitedModelNumbers.every(model => model[i] === char)) {
+          // Properly escape special regex characters
+          commonPrefix += char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          i++;
+        } else {
+          break;
+        }
       }
+      
+      // Build secure pattern with limited complexity
+      let pattern = "^" + commonPrefix;
+      
+      if (i < minLength) {
+        // Add simple, safe patterns for variable parts
+        const remainingLength = Math.min(15, minLength - i); // Limit remaining pattern length
+        
+        if (remainingLength > 0) {
+          // Use safer, more specific patterns
+          pattern += "[A-Z0-9]{1," + Math.min(remainingLength, 10) + "}"; // Alphanumeric characters
+        }
+      }
+      
+      pattern += "$";
+      
+      // Validate the generated pattern for safety
+      const validation = validateRegexPattern(pattern);
+      
+      if (!validation.isValid) {
+        console.warn('Generated pattern failed security validation, using safe fallback');
+        return "^[A-Z0-9]{3,20}$"; // Safe fallback pattern
+      }
+      
+      // Additional complexity check
+      if (validation.complexity > 30) {
+        console.warn('Generated pattern too complex, using safe fallback');
+        return "^[A-Z0-9]{3,20}$"; // Safe fallback pattern
+      }
+      
+      return pattern;
+      
+    } catch (error) {
+      console.error('Error generating pattern from model numbers:', error);
+      return "^[A-Z0-9]{3,20}$"; // Safe fallback pattern
     }
-    
-    // Build pattern for variable parts
-    let pattern = "^" + commonPrefix;
-    
-    if (i < Math.min(...modelNumbers.map(m => m.length))) {
-      // Add patterns for variable parts
-      pattern += "(\\d{2,3})"; // Capacity numbers
-      pattern += "[A-Z]*"; // Variable letters
-      pattern += "\\d*"; // Optional numbers
-    }
-    
-    pattern += "$";
-    
-    return pattern;
   }
 
   /**

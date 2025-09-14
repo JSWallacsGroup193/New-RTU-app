@@ -247,13 +247,41 @@ export function registerRoutes(app: Express): Server {
   // Get learning analytics dashboard data
   app.get("/api/learning/analytics", async (req, res) => {
     try {
-      const { startDate, endDate, manufacturer } = req.query;
+      // Validate and sanitize query parameters
+      const analyticsRequestSchema = z.object({
+        startDate: z.string().datetime().optional(),
+        endDate: z.string().datetime().optional(),
+        manufacturer: z.string().min(1).max(50).optional(),
+        period: z.enum(["daily", "weekly", "monthly", "all_time"]).default("monthly")
+      });
+
+      const validatedQuery = analyticsRequestSchema.parse(req.query);
       
       const timeframe = {
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        period: "monthly" as const
+        startDate: validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined,
+        endDate: validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined,
+        period: validatedQuery.period as const
       };
+
+      // Validate date range
+      if (timeframe.startDate && timeframe.endDate && timeframe.startDate > timeframe.endDate) {
+        return res.status(400).json({
+          error: "Invalid date range",
+          message: "Start date must be before end date"
+        });
+      }
+
+      // Limit date range to prevent excessive queries
+      const maxRangeMs = 365 * 24 * 60 * 60 * 1000; // 1 year
+      if (timeframe.startDate && timeframe.endDate) {
+        const rangeMs = timeframe.endDate.getTime() - timeframe.startDate.getTime();
+        if (rangeMs > maxRangeMs) {
+          return res.status(400).json({
+            error: "Date range too large",
+            message: "Date range cannot exceed 1 year"
+          });
+        }
+      }
       
       const analytics = await learningAnalytics.getAnalytics(timeframe);
       
@@ -261,6 +289,9 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error fetching learning analytics:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
       return handleInternalError(res, "Failed to fetch learning analytics");
     }
   });
@@ -268,30 +299,55 @@ export function registerRoutes(app: Express): Server {
   // Get user corrections for analysis
   app.get("/api/learning/corrections", async (req, res) => {
     try {
-      const { sessionId, modelNumber, limit = "50" } = req.query;
+      // Validate and sanitize query parameters
+      const correctionsQuerySchema = z.object({
+        sessionId: z.string().min(1).max(100).optional(),
+        modelNumber: z.string().min(1).max(50).optional(),
+        limit: z.string().regex(/^\d+$/).default("50").transform(val => Math.min(parseInt(val), 200)), // Max 200 results
+        offset: z.string().regex(/^\d+$/).default("0").transform(val => parseInt(val))
+      });
+
+      const validatedQuery = correctionsQuerySchema.parse(req.query);
       
+      // Ensure at least one search parameter is provided
+      if (!validatedQuery.sessionId && !validatedQuery.modelNumber) {
+        return res.status(400).json({
+          error: "Missing search parameter",
+          message: "Either sessionId or modelNumber must be provided"
+        });
+      }
+
       let corrections;
-      if (modelNumber && typeof modelNumber === "string") {
-        corrections = await storage.getUserCorrectionsByModelNumber(modelNumber);
+      if (validatedQuery.modelNumber) {
+        corrections = await storage.getUserCorrectionsByModelNumber(validatedQuery.modelNumber);
       } else {
-        corrections = await storage.getUserCorrections(sessionId as string);
+        corrections = await storage.getUserCorrections(validatedQuery.sessionId);
       }
       
-      const limitNum = parseInt(limit as string);
-      const limitedCorrections = corrections.slice(0, limitNum);
+      // Apply pagination
+      const startIndex = validatedQuery.offset;
+      const endIndex = startIndex + validatedQuery.limit;
+      const limitedCorrections = corrections.slice(startIndex, endIndex);
       
       res.json({
         corrections: limitedCorrections.map(correction => ({
           id: correction.id,
           originalModelNumber: correction.originalModelNumber,
           correctionType: correction.correctionType,
-          createdAt: correction.createdAt.toISOString()
+          createdAt: correction.createdAt.toISOString(),
+          confidence: correction.confidence
         })),
-        total: corrections.length
+        total: corrections.length,
+        limit: validatedQuery.limit,
+        offset: validatedQuery.offset,
+        hasMore: endIndex < corrections.length
       });
 
     } catch (error) {
       console.error("Error fetching user corrections:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
       return handleInternalError(res, "Failed to fetch user corrections");
     }
   });
@@ -299,13 +355,41 @@ export function registerRoutes(app: Express): Server {
   // Get performance metrics
   app.get("/api/learning/performance", async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
+      // Validate and sanitize query parameters
+      const performanceQuerySchema = z.object({
+        startDate: z.string().datetime().optional(),
+        endDate: z.string().datetime().optional(),
+        period: z.enum(["daily", "weekly", "monthly", "all_time"]).default("monthly"),
+        manufacturer: z.string().min(1).max(50).optional()
+      });
+
+      const validatedQuery = performanceQuerySchema.parse(req.query);
       
       const timeframe = {
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        period: "monthly" as const
+        startDate: validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined,
+        endDate: validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined,
+        period: validatedQuery.period as const
       };
+
+      // Validate date range
+      if (timeframe.startDate && timeframe.endDate && timeframe.startDate > timeframe.endDate) {
+        return res.status(400).json({
+          error: "Invalid date range",
+          message: "Start date must be before end date"
+        });
+      }
+
+      // Limit date range to prevent excessive queries
+      const maxRangeMs = 180 * 24 * 60 * 60 * 1000; // 6 months for performance metrics
+      if (timeframe.startDate && timeframe.endDate) {
+        const rangeMs = timeframe.endDate.getTime() - timeframe.startDate.getTime();
+        if (rangeMs > maxRangeMs) {
+          return res.status(400).json({
+            error: "Date range too large",
+            message: "Date range cannot exceed 6 months for performance metrics"
+          });
+        }
+      }
       
       const metrics = await learningAnalytics.getPerformanceMetrics(timeframe);
       
@@ -313,6 +397,9 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error fetching performance metrics:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
       return handleInternalError(res, "Failed to fetch performance metrics");
     }
   });
@@ -336,14 +423,33 @@ export function registerRoutes(app: Express): Server {
   // Get manufacturer-specific analytics
   app.get("/api/learning/manufacturers/:manufacturer", async (req, res) => {
     try {
-      const { manufacturer } = req.params;
-      const { startDate, endDate } = req.query;
+      // Validate manufacturer parameter
+      const manufacturerParamSchema = z.object({
+        manufacturer: z.string().min(1).max(50).regex(/^[A-Za-z0-9\s\-_]+$/, "Invalid manufacturer name format")
+      });
+
+      const manufacturerQuerySchema = z.object({
+        startDate: z.string().datetime().optional(),
+        endDate: z.string().datetime().optional(),
+        period: z.enum(["daily", "weekly", "monthly", "all_time"]).default("monthly")
+      });
+
+      const { manufacturer } = manufacturerParamSchema.parse(req.params);
+      const validatedQuery = manufacturerQuerySchema.parse(req.query);
       
       const timeframe = {
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        period: "monthly" as const
+        startDate: validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined,
+        endDate: validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined,
+        period: validatedQuery.period as const
       };
+
+      // Validate date range
+      if (timeframe.startDate && timeframe.endDate && timeframe.startDate > timeframe.endDate) {
+        return res.status(400).json({
+          error: "Invalid date range",
+          message: "Start date must be before end date"
+        });
+      }
       
       const analytics = await learningAnalytics.getManufacturerAnalytics(manufacturer, timeframe);
       
@@ -351,6 +457,9 @@ export function registerRoutes(app: Express): Server {
 
     } catch (error) {
       console.error("Error fetching manufacturer analytics:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
       return handleInternalError(res, "Failed to fetch manufacturer analytics");
     }
   });
@@ -392,38 +501,64 @@ export function registerRoutes(app: Express): Server {
   // Export learning data (for backup/analysis)
   app.get("/api/learning/export", async (req, res) => {
     try {
-      const { type = "all", format = "json" } = req.query;
+      // Validate and sanitize export parameters
+      const exportQuerySchema = z.object({
+        type: z.enum(["all", "corrections", "feedback", "patterns", "metrics"]).default("all"),
+        format: z.enum(["json"]).default("json"), // Only JSON supported for now
+        limit: z.string().regex(/^\d+$/).optional().transform(val => val ? Math.min(parseInt(val), 10000) : undefined), // Max 10k records
+        startDate: z.string().datetime().optional(),
+        endDate: z.string().datetime().optional()
+      });
+
+      const validatedQuery = exportQuerySchema.parse(req.query);
+      
+      // WARNING: This endpoint exports sensitive data and should have proper authentication in production
+      console.warn('Learning data export requested', {
+        type: validatedQuery.type,
+        timestamp: new Date().toISOString(),
+        ip: req.ip
+      });
       
       const data: any = {};
       
-      if (type === "all" || type === "corrections") {
-        data.corrections = await storage.getUserCorrections();
+      if (validatedQuery.type === "all" || validatedQuery.type === "corrections") {
+        const corrections = await storage.getUserCorrections();
+        data.corrections = validatedQuery.limit ? corrections.slice(0, validatedQuery.limit) : corrections;
       }
       
-      if (type === "all" || type === "feedback") {
-        data.feedback = await storage.getMatchFeedback();
+      if (validatedQuery.type === "all" || validatedQuery.type === "feedback") {
+        const feedback = await storage.getMatchFeedback();
+        data.feedback = validatedQuery.limit ? feedback.slice(0, validatedQuery.limit) : feedback;
       }
       
-      if (type === "all" || type === "patterns") {
-        data.patterns = await storage.getPatternLearnings();
+      if (validatedQuery.type === "all" || validatedQuery.type === "patterns") {
+        const patterns = await storage.getPatternLearnings();
+        data.patterns = validatedQuery.limit ? patterns.slice(0, validatedQuery.limit) : patterns;
       }
       
-      if (type === "all" || type === "metrics") {
-        data.metrics = await storage.getLearningMetrics();
+      if (validatedQuery.type === "all" || validatedQuery.type === "metrics") {
+        const startDate = validatedQuery.startDate ? new Date(validatedQuery.startDate) : undefined;
+        const endDate = validatedQuery.endDate ? new Date(validatedQuery.endDate) : undefined;
+        const metrics = await storage.getLearningMetrics(startDate, endDate);
+        data.metrics = validatedQuery.limit ? metrics.slice(0, validatedQuery.limit) : metrics;
       }
       
       // Set appropriate headers for download
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="learning-data-${new Date().toISOString()}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="learning-data-${validatedQuery.type}-${new Date().toISOString().split('T')[0]}.json"`);
       
       res.json({
         exportedAt: new Date().toISOString(),
-        exportType: type,
+        exportType: validatedQuery.type,
+        totalRecords: Object.values(data).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
         data
       });
 
     } catch (error) {
       console.error("Error exporting learning data:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
       return handleInternalError(res, "Failed to export learning data");
     }
   });

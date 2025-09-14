@@ -1005,6 +1005,46 @@ export class MemStorage implements IStorage {
     });
   }
 
+  // Additional analytics method needed by learningAnalytics
+  async findUncoveredManufacturers(): Promise<string[]> {
+    // Get all manufacturers from corrections
+    const corrections = await this.getUserCorrections();
+    const feedbacks = await this.getMatchFeedback();
+    const patterns = await this.getManufacturerPatterns(undefined, true);
+    
+    // Extract manufacturers from corrections and feedback
+    const manufacturersWithCorrections = new Set<string>();
+    const manufacturersWithPatterns = new Set<string>();
+    
+    corrections.forEach(correction => {
+      const parsed = correction.originalParsedData as any;
+      if (parsed && parsed.manufacturer) {
+        manufacturersWithCorrections.add(parsed.manufacturer);
+      }
+    });
+    
+    feedbacks.forEach(feedback => {
+      const parsed = feedback.parsedSpecs as any;
+      if (parsed && parsed.manufacturer) {
+        manufacturersWithCorrections.add(parsed.manufacturer);
+      }
+    });
+    
+    patterns.forEach(pattern => {
+      manufacturersWithPatterns.add(pattern.manufacturer);
+    });
+    
+    // Find manufacturers with corrections but no active patterns
+    const uncoveredManufacturers: string[] = [];
+    manufacturersWithCorrections.forEach(manufacturer => {
+      if (!manufacturersWithPatterns.has(manufacturer)) {
+        uncoveredManufacturers.push(manufacturer);
+      }
+    });
+    
+    return uncoveredManufacturers.sort();
+  }
+
   // Utility method for generating IDs
   private generateId(): string {
     return 'id_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
