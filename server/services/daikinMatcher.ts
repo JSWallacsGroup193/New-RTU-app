@@ -1503,48 +1503,63 @@ export class DaikinMatcher {
         console.log(`Enhanced search catalog with ${dynamicCandidates.length} dynamic Gas/Electric candidates`);
       }
       
-      // Tier 1: Try exact match with closest tonnage
-      let results = searchCatalog.filter(unit => 
-        this.strictExactMatch(unit, baseCriteria)
-      );
+      // Implement Direct/Up/Down tonnage sizing methodology
+      const sizingOptions = this.getDaikinSizingOptions(inputTonnage);
+      console.log(`Implementing Direct/Up/Down sizing for ${inputTonnage}T:`, {
+        direct: sizingOptions.direct,
+        up: sizingOptions.up,
+        down: sizingOptions.down
+      });
       
-      if (results.length > 0) {
-        console.log(`Found ${results.length} exact matches for specs: ${JSON.stringify(baseCriteria)}`);
-        return results;
+      const directUpDownResults = this.searchWithDirectUpDownSizing(searchInput, sizingOptions, searchCatalog);
+      if (directUpDownResults.length > 0) {
+        console.log(`Found ${directUpDownResults.length} Direct/Up/Down sizing results`);
+        return directUpDownResults;
       }
       
-      console.log(`No exact matches found for specs: ${JSON.stringify(baseCriteria)}. Trying fallback tiers...`);
+      // If Direct/Up/Down sizing fails, fall back to tiered search
+      console.log(`No Direct/Up/Down matches found. Trying fallback tiers...`);
+      
+      const fallbackTonnage = this.findClosestDaikinTonnage(inputTonnage);
+      const fallbackFormattedTonnage = fallbackTonnage % 1 === 0 ? 
+        `${fallbackTonnage}.0` : 
+        fallbackTonnage.toString();
+      
+      const fallbackCriteria = {
+        ...searchInput,
+        tonnage: fallbackFormattedTonnage as Tonnage
+      };
       
       // Tier 2: Try nearest tonnage neighbors with same systemType and voltage/phase
-      results = this.searchNearestTonnageNeighbors(baseCriteria, searchCatalog);
+      let results = this.searchNearestTonnageNeighbors(fallbackCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with nearest tonnage neighbors`);
         return results;
       }
       
       // Tier 3: Try same tonnage with same systemType but any phase for selected voltage
-      results = this.searchSameVoltageAnyPhase(baseCriteria, searchCatalog);
+      results = this.searchSameVoltageAnyPhase(fallbackCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with same voltage, any phase`);
         return results;
       }
       
       // Tier 4: Try same tonnage with same systemType but any available voltage/phase
-      results = this.searchAnyVoltagePhase(baseCriteria, searchCatalog);
+      results = this.searchAnyVoltagePhase(fallbackCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with any voltage/phase`);
         return results;
       }
       
       // Tier 5: Final fallback - same system type with any tonnage within sizing range
-      results = this.searchSameSystemTypeAnySizing(baseCriteria, searchCatalog);
+      results = this.searchSameSystemTypeAnySizing(fallbackCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with same system type, any sizing`);
         return results;
       }
       
       // Tier 6: Ultimate fallback - return best available options with size alternatives
-      results = this.searchWithSizeAlternatives(baseCriteria, searchCatalog);
+      results = this.searchWithSizeAlternatives(fallbackCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with size alternatives (ultimate fallback)`);
         return results;
@@ -1573,6 +1588,103 @@ export class DaikinMatcher {
       console.error("Error in searchBySpecInput:", error);
       return [];
     }
+  }
+
+  /**
+   * Implement proper HVAC Direct/Up/Down sizing methodology
+   * Returns best unit for direct match, one size up, and one size down
+   */
+  private searchWithDirectUpDownSizing(
+    searchInput: SpecSearchInputLegacy, 
+    sizingOptions: { direct: number; up: number | null; down: number | null },
+    searchCatalog: DaikinUnitSpec[]
+  ): DaikinUnitSpec[] {
+    const results: DaikinUnitSpec[] = [];
+    const { direct, up, down } = sizingOptions;
+    
+    // Helper function to find best unit for a specific tonnage
+    const findBestUnitForTonnage = (targetTonnage: number, sizingType: 'direct' | 'upsize' | 'downsize'): DaikinUnitSpec | null => {
+      // Use canonical tonnage format ("10" not "10.0") to match catalog
+      const tonnageStr = String(targetTonnage);
+      const criteria = {
+        ...searchInput,
+        tonnage: tonnageStr as Tonnage
+      };
+      
+      console.log(`Searching for ${sizingType} ${targetTonnage}T using tonnage string: "${tonnageStr}"`);
+      
+      // Find all units matching this tonnage
+      const candidates = searchCatalog.filter(unit => 
+        this.strictExactMatch(unit, criteria)
+      );
+      
+      console.log(`Found ${candidates.length} ${sizingType} candidates for ${targetTonnage}T`);
+      
+      if (candidates.length === 0) {
+        console.log(`No ${sizingType} candidates found for ${targetTonnage}T`);
+        return null;
+      }
+      
+      // Prioritize selection based on criteria match quality
+      // 1. Exact voltage/phase match
+      // 2. Same system type and heating BTU
+      // 3. Best overall specifications
+      const prioritized = candidates.sort((a, b) => {
+        // Prefer exact voltage matches
+        const aVoltageMatch = this.normalizeVoltage(a.voltage, searchInput.voltage);
+        const bVoltageMatch = this.normalizeVoltage(b.voltage, searchInput.voltage);
+        if (aVoltageMatch && !bVoltageMatch) return -1;
+        if (!aVoltageMatch && bVoltageMatch) return 1;
+        
+        // Prefer exact phase matches
+        const aPhaseMatch = this.normalizePhases(a.phases, searchInput.phases);
+        const bPhaseMatch = this.normalizePhases(b.phases, searchInput.phases);
+        if (aPhaseMatch && !bPhaseMatch) return -1;
+        if (!aPhaseMatch && bPhaseMatch) return 1;
+        
+        // Prefer better efficiency ratings
+        const aSeer = parseFloat(a.seerRating || '0');
+        const bSeer = parseFloat(b.seerRating || '0');
+        return bSeer - aSeer;
+      });
+      
+      console.log(`Selected best ${sizingType} unit: ${prioritized[0].modelNumber} (${targetTonnage}T)`);
+      return prioritized[0];
+    };
+    
+    // 1. Direct Match (closest available tonnage)
+    const directUnit = findBestUnitForTonnage(direct, 'direct');
+    if (directUnit) {
+      results.push(directUnit);
+    }
+    
+    // 2. Upsize (next larger tonnage)
+    if (up !== null) {
+      const upsizeUnit = findBestUnitForTonnage(up, 'upsize');
+      if (upsizeUnit) {
+        results.push(upsizeUnit);
+      }
+    }
+    
+    // 3. Downsize (next smaller tonnage)
+    if (down !== null) {
+      const downsizeUnit = findBestUnitForTonnage(down, 'downsize');
+      if (downsizeUnit) {
+        results.push(downsizeUnit);
+      }
+    }
+    
+    console.log(`Direct/Up/Down sizing results: ${results.length} units found`);
+    results.forEach((unit, index) => {
+      const sizingType = index === 0 ? 'Direct' : index === 1 ? 'Upsize' : 'Downsize';
+      console.log(`  ${sizingType}: ${unit.modelNumber} (${unit.tonnage}T)`);
+    });
+    
+    if (results.length === 0) {
+      console.log(`No Direct/Up/Down results found - will fall back to tiered search`);
+    }
+    
+    return results;
   }
 
   /**
