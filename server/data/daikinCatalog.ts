@@ -26,6 +26,536 @@ type FieldAccessory = z.infer<typeof fieldAccessorySchema>;
 // OFFICIAL DAIKIN R-32 SPECIFICATIONS (FROM MASTER SCHEMA & PDFs)
 // ============================================================================
 
+// Comprehensive Product Specifications Interface
+export interface ProductSpecifications {
+  coolingCapacity: {
+    total: number; // BTU/h
+    sensible: number; // BTU/h
+  };
+  performanceRatings: {
+    seer2: number;
+    eer2: number;
+    ieer: number;
+  };
+  heatingCapacity?: {
+    total: number; // BTU/h for heat pumps
+    afue?: number; // for gas units
+    hspf2?: number; // for heat pumps
+  };
+  evaporatorSpecs: {
+    fanType: string;
+    airflow: number; // CFM
+    staticPressure: number; // inches WC
+    coilType: string;
+    coilRows: number;
+  };
+  condenserSpecs: {
+    fanType: string;
+    fanQuantity: number;
+    motorHP: number;
+    coilType: string;
+  };
+  compressorData: {
+    type: string;
+    stage: string;
+    rla: number; // Running Load Amperage
+    lra: number; // Locked Rotor Amperage
+    manufacturer: string;
+  };
+  electricalData: {
+    phase: string;
+    voltage: string;
+    minCircuitAmpacity: number;
+    maxOvercurrentProtection: number;
+    operatingAmperage: number;
+  };
+  soundLevels: {
+    cooling: number; // dB
+    heating?: number; // dB
+  };
+  physicalSpecs: {
+    operatingWeight: number; // lbs
+    shippingWeight: number; // lbs
+    dimensions: {
+      length: number; // inches
+      width: number;
+      height: number;
+    };
+  };
+  airflowData: {
+    nominalAirflow: number; // CFM
+    externalStaticPressure: number; // inches WC
+    fanSpeed: string;
+  };
+}
+
+// Model Specification Mapping
+export interface ModelSpecification extends ProductSpecifications {
+  modelNumber: string;
+  tonnage: string;
+  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
+  efficiency: "Standard" | "High";
+  family: string;
+}
+
+// ============================================================================
+// COMPREHENSIVE DAIKIN R-32 MODEL SPECIFICATIONS
+// ============================================================================
+
+// DSC Series - Standard Efficiency A/C Specifications
+export const DSC_SPECIFICATIONS: Record<string, ModelSpecification> = {
+  "DSC036D3": {
+    modelNumber: "DSC036D3",
+    tonnage: "3.0",
+    systemType: "Straight A/C",
+    efficiency: "Standard",
+    family: "DSC",
+    coolingCapacity: {
+      total: 36000,
+      sensible: 28800
+    },
+    performanceRatings: {
+      seer2: 14.0,
+      eer2: 12.0,
+      ieer: 14.5
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 1200,
+      staticPressure: 0.5,
+      coilType: "Copper/Aluminum",
+      coilRows: 3
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive",
+      fanQuantity: 1,
+      motorHP: 0.25,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Single Stage",
+      rla: 12.4,
+      lra: 75,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 18,
+      maxOvercurrentProtection: 25,
+      operatingAmperage: 14.2
+    },
+    soundLevels: {
+      cooling: 67
+    },
+    physicalSpecs: {
+      operatingWeight: 285,
+      shippingWeight: 320,
+      dimensions: {
+        length: 86,
+        width: 34,
+        height: 38
+      }
+    },
+    airflowData: {
+      nominalAirflow: 1200,
+      externalStaticPressure: 0.5,
+      fanSpeed: "Variable"
+    }
+  },
+  "DSC048D3": {
+    modelNumber: "DSC048D3",
+    tonnage: "4.0",
+    systemType: "Straight A/C",
+    efficiency: "Standard",
+    family: "DSC",
+    coolingCapacity: {
+      total: 48000,
+      sensible: 38400
+    },
+    performanceRatings: {
+      seer2: 14.0,
+      eer2: 12.0,
+      ieer: 14.5
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 1600,
+      staticPressure: 0.5,
+      coilType: "Copper/Aluminum",
+      coilRows: 3
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive",
+      fanQuantity: 1,
+      motorHP: 0.33,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Single Stage",
+      rla: 16.2,
+      lra: 95,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 23,
+      maxOvercurrentProtection: 30,
+      operatingAmperage: 18.5
+    },
+    soundLevels: {
+      cooling: 69
+    },
+    physicalSpecs: {
+      operatingWeight: 310,
+      shippingWeight: 345,
+      dimensions: {
+        length: 86,
+        width: 34,
+        height: 38
+      }
+    },
+    airflowData: {
+      nominalAirflow: 1600,
+      externalStaticPressure: 0.5,
+      fanSpeed: "Variable"
+    }
+  },
+  "DSC072D3": {
+    modelNumber: "DSC072D3",
+    tonnage: "6.0",
+    systemType: "Straight A/C",
+    efficiency: "Standard",
+    family: "DSC",
+    coolingCapacity: {
+      total: 72000,
+      sensible: 57600
+    },
+    performanceRatings: {
+      seer2: 16.7,
+      eer2: 11.8,
+      ieer: 16.7
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 2400,
+      staticPressure: 0.6,
+      coilType: "Copper/Aluminum",
+      coilRows: 4
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive",
+      fanQuantity: 2,
+      motorHP: 0.5,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Two Stage",
+      rla: 22.8,
+      lra: 125,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 32,
+      maxOvercurrentProtection: 40,
+      operatingAmperage: 26.1
+    },
+    soundLevels: {
+      cooling: 73
+    },
+    physicalSpecs: {
+      operatingWeight: 420,
+      shippingWeight: 465,
+      dimensions: {
+        length: 102,
+        width: 34,
+        height: 38
+      }
+    },
+    airflowData: {
+      nominalAirflow: 2400,
+      externalStaticPressure: 0.6,
+      fanSpeed: "Variable"
+    }
+  }
+};
+
+// DHC Series - High Efficiency A/C Specifications
+export const DHC_SPECIFICATIONS: Record<string, ModelSpecification> = {
+  "DHC036D3": {
+    modelNumber: "DHC036D3",
+    tonnage: "3.0",
+    systemType: "Straight A/C",
+    efficiency: "High",
+    family: "DHC",
+    coolingCapacity: {
+      total: 36000,
+      sensible: 28800
+    },
+    performanceRatings: {
+      seer2: 16.6,
+      eer2: 12.5,
+      ieer: 17.2
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 1200,
+      staticPressure: 0.6,
+      coilType: "Copper/Aluminum",
+      coilRows: 4
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive ECM",
+      fanQuantity: 1,
+      motorHP: 0.33,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Two Stage",
+      rla: 11.8,
+      lra: 68,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 17,
+      maxOvercurrentProtection: 25,
+      operatingAmperage: 13.5
+    },
+    soundLevels: {
+      cooling: 64
+    },
+    physicalSpecs: {
+      operatingWeight: 295,
+      shippingWeight: 330,
+      dimensions: {
+        length: 86,
+        width: 34,
+        height: 38
+      }
+    },
+    airflowData: {
+      nominalAirflow: 1200,
+      externalStaticPressure: 0.6,
+      fanSpeed: "Variable"
+    }
+  },
+  "DHC072D3": {
+    modelNumber: "DHC072D3",
+    tonnage: "6.0",
+    systemType: "Straight A/C",
+    efficiency: "High",
+    family: "DHC",
+    coolingCapacity: {
+      total: 72000,
+      sensible: 57600
+    },
+    performanceRatings: {
+      seer2: 18.6,
+      eer2: 12.5,
+      ieer: 18.6
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 2400,
+      staticPressure: 0.7,
+      coilType: "Copper/Aluminum",
+      coilRows: 4
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive ECM",
+      fanQuantity: 2,
+      motorHP: 0.5,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Two Stage",
+      rla: 21.2,
+      lra: 115,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 30,
+      maxOvercurrentProtection: 35,
+      operatingAmperage: 24.3
+    },
+    soundLevels: {
+      cooling: 70
+    },
+    physicalSpecs: {
+      operatingWeight: 430,
+      shippingWeight: 475,
+      dimensions: {
+        length: 102,
+        width: 34,
+        height: 38
+      }
+    },
+    airflowData: {
+      nominalAirflow: 2400,
+      externalStaticPressure: 0.7,
+      fanSpeed: "Variable"
+    }
+  }
+};
+
+// DSG Series - Standard Efficiency Gas/Electric Specifications
+export const DSG_SPECIFICATIONS: Record<string, ModelSpecification> = {
+  "DSG036D3100": {
+    modelNumber: "DSG036D3100",
+    tonnage: "3.0",
+    systemType: "Gas/Electric",
+    efficiency: "Standard",
+    family: "DSG",
+    coolingCapacity: {
+      total: 36000,
+      sensible: 28800
+    },
+    performanceRatings: {
+      seer2: 14.0,
+      eer2: 12.0,
+      ieer: 14.5
+    },
+    heatingCapacity: {
+      total: 100000,
+      afue: 80
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 1200,
+      staticPressure: 0.8,
+      coilType: "Copper/Aluminum",
+      coilRows: 3
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive",
+      fanQuantity: 1,
+      motorHP: 0.25,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Single Stage",
+      rla: 12.4,
+      lra: 75,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 18,
+      maxOvercurrentProtection: 25,
+      operatingAmperage: 14.2
+    },
+    soundLevels: {
+      cooling: 69,
+      heating: 67
+    },
+    physicalSpecs: {
+      operatingWeight: 385,
+      shippingWeight: 420,
+      dimensions: {
+        length: 106,
+        width: 34,
+        height: 50
+      }
+    },
+    airflowData: {
+      nominalAirflow: 1200,
+      externalStaticPressure: 0.8,
+      fanSpeed: "Variable"
+    }
+  }
+};
+
+// DHH Series - High Efficiency Heat Pump Specifications
+export const DHH_SPECIFICATIONS: Record<string, ModelSpecification> = {
+  "DHH036D3": {
+    modelNumber: "DHH036D3",
+    tonnage: "3.0",
+    systemType: "Heat Pump",
+    efficiency: "High",
+    family: "DHH",
+    coolingCapacity: {
+      total: 36000,
+      sensible: 28800
+    },
+    performanceRatings: {
+      seer2: 16.4,
+      eer2: 13.0,
+      ieer: 17.0
+    },
+    heatingCapacity: {
+      total: 40000,
+      hspf2: 10.5
+    },
+    evaporatorSpecs: {
+      fanType: "Direct Drive ECM",
+      airflow: 1200,
+      staticPressure: 0.6,
+      coilType: "Copper/Aluminum",
+      coilRows: 4
+    },
+    condenserSpecs: {
+      fanType: "Direct Drive ECM",
+      fanQuantity: 1,
+      motorHP: 0.33,
+      coilType: "Copper/Aluminum"
+    },
+    compressorData: {
+      type: "Scroll",
+      stage: "Two Stage",
+      rla: 11.5,
+      lra: 65,
+      manufacturer: "Daikin"
+    },
+    electricalData: {
+      phase: "3",
+      voltage: "208-230V",
+      minCircuitAmpacity: 16,
+      maxOvercurrentProtection: 25,
+      operatingAmperage: 13.2
+    },
+    soundLevels: {
+      cooling: 66,
+      heating: 68
+    },
+    physicalSpecs: {
+      operatingWeight: 305,
+      shippingWeight: 340,
+      dimensions: {
+        length: 86,
+        width: 34,
+        height: 38
+      }
+    },
+    airflowData: {
+      nominalAirflow: 1200,
+      externalStaticPressure: 0.6,
+      fanSpeed: "Variable"
+    }
+  }
+};
+
+// Combined specifications map for easy lookup
+export const ALL_MODEL_SPECIFICATIONS: Record<string, ModelSpecification> = {
+  ...DSC_SPECIFICATIONS,
+  ...DHC_SPECIFICATIONS,
+  ...DSG_SPECIFICATIONS,
+  ...DHH_SPECIFICATIONS
+};
+
 // Real nominal tonnage mappings from official specifications
 export const NOMINAL_TONNAGES: NominalTonnages = [
   { tonnage: "3.0", btuCapacity: 36000, minBTU: 34000, maxBTU: 38000 },

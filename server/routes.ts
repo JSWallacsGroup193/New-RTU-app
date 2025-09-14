@@ -29,6 +29,7 @@ import {
   projectDetailResponseSchema
 } from "@shared/schema";
 import { z } from "zod";
+import { ALL_MODEL_SPECIFICATIONS, type ModelSpecification } from "./data/daikinCatalog";
 import {
   handleError,
   handleValidationError,
@@ -1480,6 +1481,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Internal server error",
         message: "An error occurred while retrieving recent projects"
       });
+    }
+  });
+
+  // Product Specifications API
+  app.get('/api/specifications/:modelNumber', (req, res) => {
+    try {
+      const { modelNumber } = req.params;
+      
+      if (!modelNumber) {
+        return res.status(400).json({ error: 'Model number is required' });
+      }
+      
+      const specification = ALL_MODEL_SPECIFICATIONS[modelNumber.toUpperCase()];
+      
+      if (!specification) {
+        return res.status(404).json({ error: 'Specification not found for this model' });
+      }
+      
+      res.json(specification);
+    } catch (error) {
+      console.error('Error fetching specification:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // Get all available model specifications
+  app.get('/api/specifications', (req, res) => {
+    try {
+      res.json(ALL_MODEL_SPECIFICATIONS);
+    } catch (error) {
+      console.error('Error fetching specifications:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
