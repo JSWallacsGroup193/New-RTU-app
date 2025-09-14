@@ -43,6 +43,7 @@ import {
   getAvailableTonnages,
   POSITION_MAPPINGS,
   FAMILY_DEFINITIONS,
+  DAIKIN_R32_FAMILIES,
   getPositionDescription,
   getCapacityFromCode,
   getGasBTUFromCode,
@@ -827,19 +828,19 @@ export class DaikinMatcher {
     const expectedHighEfficiency = criteria.efficiency === "high";
     if (isHighEfficiency !== expectedHighEfficiency) return false;
     
-    // Conditional exact matches based on system type
+    // Conditional nearest matches based on system type
     if (criteria.systemType === "Gas/Electric") {
-      // For Gas/Electric systems, heatingBTU must match exactly
+      // For Gas/Electric systems, heatingBTU must match nearest available
       if (!criteria.heatingBTU) return false; // Required field
-      if (!unit.heatingBTU || Math.abs(unit.heatingBTU - criteria.heatingBTU) > 1) return false;
+      if (!this.isNearestHeatingBTUMatch(unit.heatingBTU, criteria.heatingBTU)) return false;
       
       // Gas category must match if specified
       if (criteria.gasCategory && unit.gasCategory !== criteria.gasCategory) return false;
     }
     
     if (criteria.systemType === "Heat Pump" && criteria.heatKitKW) {
-      // For Heat Pumps with heat kit, must match exactly
-      if (!unit.heatKitKW || Math.abs(unit.heatKitKW - criteria.heatKitKW) > 0.1) return false;
+      // For Heat Pumps with heat kit, must match nearest available
+      if (!this.isNearestElectricKWMatch(unit.heatKitKW, criteria.heatKitKW)) return false;
     }
     
     // Optional strict filters
@@ -881,12 +882,21 @@ export class DaikinMatcher {
    */
   private normalizeVoltage(unitVoltage: string, criteriaVoltage: string): boolean {
     const normalize = (voltage: string): string => {
-      return voltage
-        .replace(/[^0-9-]/g, '') // Keep only numbers and dashes
-        .replace(/^([0-9]+)-?([0-9]+)$/, '$1-$2'); // Ensure dash format
+      // Extract the main voltage numbers (e.g., "208-230" from "208-230/1/60")
+      const match = voltage.match(/(\d+)-?(\d+)/);
+      if (match) {
+        return `${match[1]}-${match[2]}`;
+      }
+      // Fallback for single voltage numbers
+      const singleMatch = voltage.match(/(\d+)/);
+      return singleMatch ? singleMatch[1] : voltage;
     };
     
-    return normalize(unitVoltage) === normalize(criteriaVoltage);
+    const normalizedUnit = normalize(unitVoltage);
+    const normalizedCriteria = normalize(criteriaVoltage);
+    console.log(`        Voltage normalization details: unit="${unitVoltage}" -> "${normalizedUnit}", criteria="${criteriaVoltage}" -> "${normalizedCriteria}"`);
+    
+    return normalizedUnit === normalizedCriteria;
   }
 
   /**
@@ -899,6 +909,34 @@ export class DaikinMatcher {
     };
     
     return normalizePhase(unitPhases) === normalizePhase(criteriaPhases);
+  }
+
+  /**
+   * Check if heating BTU is the nearest available match instead of exact
+   */
+  private isNearestHeatingBTUMatch(unitHeatingBTU?: number, criteriaHeatingBTU?: number): boolean {
+    if (!criteriaHeatingBTU) return true; // No heating required
+    if (!unitHeatingBTU) return false; // Unit has no heating but criteria requires it
+    
+    const nearestMatch = findNearestGasBTUCode(criteriaHeatingBTU, 'nearest');
+    if (!nearestMatch) return false;
+    
+    // Unit heating BTU should match the nearest available heating BTU for the criteria
+    return Math.abs(unitHeatingBTU - nearestMatch.value) < 1000;
+  }
+
+  /**
+   * Check if electric kW is the nearest available match instead of exact
+   */
+  private isNearestElectricKWMatch(unitElectricKW?: number, criteriaElectricKW?: number): boolean {
+    if (!criteriaElectricKW) return true; // No electric heating required
+    if (!unitElectricKW) return false; // Unit has no electric heating but criteria requires it
+    
+    const nearestMatch = findNearestElectricKWCode(criteriaElectricKW, 'nearest');
+    if (!nearestMatch) return false;
+    
+    // Unit electric kW should match the nearest available electric kW for the criteria
+    return Math.abs(unitElectricKW - nearestMatch.value) < 0.5;
   }
 
   /**
@@ -1117,6 +1155,327 @@ export class DaikinMatcher {
   }
 
   /**
+   * Dynamically generate Gas/Electric candidates from DSG and DHG families
+   * This ensures all possible combinations are available for searching, including 8.5T units
+   */
+  private generateGasElectricCandidates(criteria: SpecSearchInputLegacy): DaikinUnitSpec[] {
+    // Only generate for Gas/Electric searches
+    if (criteria.systemType !== "Gas/Electric") {
+      console.log(`Skipping generation - not Gas/Electric system: ${criteria.systemType}`);
+      return [];
+    }
+
+    const candidates: DaikinUnitSpec[] = [];
+    const targetTonnage = parseFloat(criteria.tonnage);
+    console.log(`Starting Gas/Electric candidate generation for tonnage: ${targetTonnage}`);
+    
+    // Generate candidates from both DSG (Standard) and DHG (High Efficiency) families
+    const families: Array<{ key: DaikinFamilyKeys; efficiency: Efficiency }> = [
+      { key: "DSG", efficiency: "standard" },
+      { key: "DHG", efficiency: "high" }
+    ];
+
+    for (const family of families) {
+      console.log(`Processing family: ${family.key} (${family.efficiency})`);
+      
+      // Skip if efficiency filter doesn't match
+      if (criteria.efficiency && criteria.efficiency !== family.efficiency) {
+        console.log(`Skipping ${family.key} - efficiency mismatch: ${criteria.efficiency} vs ${family.efficiency}`);
+        continue;
+      }
+
+      // Use FAMILY_DEFINITIONS for consistency with buildModelWithFallback
+      const familyDef = FAMILY_DEFINITIONS[family.key];
+      const oldFamilyDef = DAIKIN_R32_FAMILIES[family.key];
+      
+      if (!familyDef) {
+        console.log(`No family definition found for ${family.key} in FAMILY_DEFINITIONS`);
+        continue;
+      }
+      
+      if (!oldFamilyDef) {
+        console.log(`No family definition found for ${family.key} in DAIKIN_R32_FAMILIES`);
+        continue;
+      }
+
+      // Extract tonnages from capacity_allowed codes
+      const availableTonnages = this.extractTonnagesFromCapacityCodes(familyDef.capacity_allowed);
+      console.log(`Available tonnages for ${family.key}:`, availableTonnages);
+      
+      // Try to build models for the target tonnage and nearby tonnages
+      const tonnagesToTry = this.getGasElectricTonnagesToTry(targetTonnage, availableTonnages.map(t => t.toString()));
+      console.log(`Tonnages to try for ${family.key}:`, tonnagesToTry);
+      
+      for (const tonnage of tonnagesToTry) {
+        console.log(`  Processing tonnage: ${tonnage}`);
+        
+        // Get gas BTU options for this tonnage and family
+        const gasBtuOptions = this.getGasBtuOptionsForTonnage(tonnage, family.key);
+        console.log(`    Gas BTU options:`, gasBtuOptions);
+        
+        if (gasBtuOptions.length === 0) {
+          console.log(`    No gas BTU options available for ${tonnage}T in ${family.key}`);
+          continue;
+        }
+        
+        for (const gasBtu of gasBtuOptions) {
+          console.log(`    Processing gas BTU: ${gasBtu}`);
+          
+          // Skip if gas BTU filter doesn't match
+          if (criteria.heatingBTU && Math.abs(gasBtu - criteria.heatingBTU) > 10000) {
+            console.log(`      Skipping gas BTU ${gasBtu} - too far from target ${criteria.heatingBTU}`);
+            continue;
+          }
+
+          // Use voltage/phase combinations from FAMILY_DEFINITIONS
+          const voltagePhases = familyDef.voltage_phase_combinations.map(vpc => ({
+            code: vpc.voltage_code,
+            voltage: vpc.description.includes("208/230V") ? "208-230V" : 
+                    vpc.description.includes("460V") ? "460V" : "575V",
+            phases: vpc.phase_code
+          }));
+          console.log(`      Voltage/phase combinations:`, voltagePhases);
+
+          for (const vp of voltagePhases) {
+            console.log(`        Processing voltage: ${vp.voltage}, phases: ${vp.phases}`);
+            
+            // Build model request
+            const buildRequest: BuildModelRequest = {
+              family: family.key,
+              tons: tonnage,
+              voltage: vp.voltage as VoltageEnum,
+              gas_btu_numeric: gasBtu,
+              controls: "A",
+              fan_drive: "D",
+              refrig_sys: "A",
+              heat_exchanger: "X",
+              accessories: {}
+            };
+
+            console.log(`          Building model with request:`, JSON.stringify(buildRequest, null, 2));
+            const buildResponse = this.buildModelWithFallback(buildRequest);
+            console.log(`          Build response success: ${buildResponse.success}`);
+            
+            if (buildResponse.success && buildResponse.result) {
+              console.log(`          Successfully built model: ${buildResponse.result.model}`);
+              const unitSpec = this.convertEnhancedResultToUnitSpec(buildResponse.result, vp.phases as PhaseEnum);
+              
+              // Apply additional filters if needed
+              const passesFilters = this.matchesAdditionalFilters(unitSpec, criteria);
+              console.log(`          Passes additional filters: ${passesFilters}`);
+              
+              if (passesFilters) {
+                candidates.push(unitSpec);
+                console.log(`          Added candidate: ${unitSpec.modelNumber}`);
+              }
+            } else {
+              console.log(`          Build failed:`, buildResponse.errors);
+            }
+          }
+        }
+      }
+    }
+
+    console.log(`Generated ${candidates.length} dynamic Gas/Electric candidates for tonnage ${targetTonnage}`);
+    return candidates;
+  }
+
+  /**
+   * Extract tonnages from capacity codes (e.g., "102" -> 8.5)
+   */
+  private extractTonnagesFromCapacityCodes(capacityCodes: string[]): number[] {
+    console.log(`Input capacity codes:`, capacityCodes);
+    const result = capacityCodes.map(code => {
+      const tonnage = getCapacityFromCode(code); // Already returns tonnage, not BTU
+      console.log(`  Code "${code}" -> tonnage: ${tonnage}`);
+      return tonnage;
+    }).filter(tonnage => tonnage > 0).sort((a, b) => a - b);
+    console.log(`Final tonnages:`, result);
+    return result;
+  }
+
+  /**
+   * Get tonnages to try for Gas/Electric generation, including target and neighbors
+   */
+  private getGasElectricTonnagesToTry(targetTonnage: number, availableTonnages: string[]): number[] {
+    const tonnages = availableTonnages.map(t => parseFloat(t)).sort((a, b) => a - b);
+    const result: number[] = [];
+    
+    if (tonnages.length === 0) {
+      console.log(`Warning: No available tonnages provided`);
+      return [];
+    }
+    
+    // Add exact match if available
+    if (tonnages.includes(targetTonnage)) {
+      result.push(targetTonnage);
+    }
+    
+    // Add closest tonnage
+    let closest = tonnages[0];
+    let minDistance = Math.abs(closest - targetTonnage);
+    
+    for (const tonnage of tonnages) {
+      const distance = Math.abs(tonnage - targetTonnage);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = tonnage;
+      }
+    }
+    
+    if (!result.includes(closest)) {
+      result.push(closest);
+    }
+    
+    // Add immediate neighbors for better coverage
+    const closestIndex = tonnages.indexOf(closest);
+    if (closestIndex > 0) {
+      result.push(tonnages[closestIndex - 1]);
+    }
+    if (closestIndex < tonnages.length - 1) {
+      result.push(tonnages[closestIndex + 1]);
+    }
+    
+    return Array.from(new Set(result)).sort((a, b) => a - b);
+  }
+
+  /**
+   * Get gas BTU options for a specific tonnage and family
+   */
+  private getGasBtuOptionsForTonnage(tonnage: number, familyKey: DaikinFamilyKeys): number[] {
+    const familyDef = DAIKIN_R32_FAMILIES[familyKey];
+    if (!familyDef || !familyDef.gasHeatingBTU) {
+      return [];
+    }
+
+    // Map tonnage to gas BTU key
+    const tonnageKey = tonnage <= 5 ? `${tonnage}T` : 
+                      tonnage <= 6 ? `${tonnage}T` :
+                      tonnage <= 7.5 ? `7.5T` :
+                      tonnage <= 8.5 ? `8.5T` :
+                      tonnage <= 10 ? `10T` : `10T+`;
+    
+    const gasOptions = familyDef.gasHeatingBTU[tonnageKey];
+    return gasOptions || familyDef.gasHeatingBTU[`10T+`] || [];
+  }
+
+  /**
+   * Convert EnhancedReplacementResult to DaikinUnitSpec for compatibility
+   */
+  private convertEnhancedResultToUnitSpec(result: EnhancedReplacementResult, phases: PhaseEnum): DaikinUnitSpec {
+    const spec = result.specifications;
+    
+    // Extract voltage from the model or build request context
+    const voltage = this.extractVoltageFromModel(result.model, phases);
+    
+    console.log(`        Converting model: ${result.model}`);
+    console.log(`          Extracted voltage: "${voltage}"`);
+    console.log(`          Phases: "${phases}"`);
+    console.log(`          Gas BTU: ${result.gas_btu_match?.direct_match.value}`);
+    
+    return {
+      ...spec,
+      id: `dynamic-${result.model}`,
+      modelNumber: result.model,
+      phases: phases,
+      voltage: voltage, // Ensure voltage is properly set
+      heatingBTU: result.gas_btu_match?.direct_match.value,
+      gasCategory: "Natural Gas" as GasCategory,
+      // Add any missing fields with defaults
+      controls: spec.controls || ["Standard"],
+      sensors: spec.sensors || ["Temperature", "Pressure"],
+      electricalAddOns: spec.electricalAddOns || [],
+      fieldAccessories: spec.fieldAccessories || [],
+      serviceOptions: spec.serviceOptions || [],
+      iaqFeatures: spec.iaqFeatures || []
+    };
+  }
+
+  /**
+   * Extract voltage format from model and phases for filtering compatibility
+   */
+  private extractVoltageFromModel(model: string, phases: PhaseEnum): string {
+    // Extract voltage code from position 7 of the model (0-indexed position 6)
+    const voltageCode = model.charAt(6);
+    
+    // Map voltage codes to expected filtering format
+    const voltageMap: Record<string, string> = {
+      "1": "208-230/1/60",
+      "3": "208-230/3/60", 
+      "4": "460/3/60",
+      "7": "575/3/60"
+    };
+    
+    const voltage = voltageMap[voltageCode] || "208-230/3/60"; // Default fallback
+    console.log(`        Voltage extraction: model="${model}", position 6="${voltageCode}", mapped to="${voltage}"`);
+    return voltage;
+  }
+
+  /**
+   * Check if generated unit matches additional search filters
+   */
+  private matchesAdditionalFilters(unit: DaikinUnitSpec, criteria: SpecSearchInputLegacy): boolean {
+    console.log(`    ===== FILTERING UNIT: ${unit.modelNumber} =====`);
+    console.log(`      Unit voltage: "${unit.voltage}", criteria voltage: "${criteria.voltage}"`);
+    console.log(`      Unit phases: "${unit.phases}", criteria phases: "${criteria.phases}"`);
+    console.log(`      Unit gasCategory: "${unit.gasCategory}", criteria gasCategory: "${criteria.gasCategory}"`);
+    console.log(`      Unit heatingBTU: "${unit.heatingBTU}", criteria heatingBTU: "${criteria.heatingBTU}"`);
+    console.log(`      Unit refrigerant: "${unit.refrigerant}", criteria refrigerant: "${criteria.refrigerant}"`);
+    console.log(`      Unit driveType: "${unit.driveType}", criteria driveType: "${criteria.driveType}"`);
+    
+    // Voltage filter
+    if (criteria.voltage) {
+      const voltageMatch = this.normalizeVoltage(unit.voltage, criteria.voltage);
+      console.log(`      Voltage normalization: unit="${unit.voltage}" vs criteria="${criteria.voltage}" = ${voltageMatch}`);
+      if (!voltageMatch) {
+        console.log(`      REJECTED: Voltage mismatch`);
+        return false;
+      }
+    }
+    
+    // Phases filter
+    if (criteria.phases) {
+      const phasesMatch = this.normalizePhases(unit.phases, criteria.phases);
+      console.log(`      Phases normalization: unit="${unit.phases}" vs criteria="${criteria.phases}" = ${phasesMatch}`);
+      if (!phasesMatch) {
+        console.log(`      REJECTED: Phases mismatch`);
+        return false;
+      }
+    }
+    
+    // Gas category filter
+    if (criteria.gasCategory) {
+      const gasCategoryMatch = unit.gasCategory === criteria.gasCategory;
+      console.log(`      Gas category match: unit="${unit.gasCategory}" vs criteria="${criteria.gasCategory}" = ${gasCategoryMatch}`);
+      if (!gasCategoryMatch) {
+        console.log(`      REJECTED: Gas category mismatch`);
+        return false;
+      }
+    }
+    
+    // Sound level filter
+    if (criteria.maxSoundLevel && unit.soundLevel > criteria.maxSoundLevel) {
+      console.log(`      REJECTED: Sound level too high: ${unit.soundLevel} > ${criteria.maxSoundLevel}`);
+      return false;
+    }
+    
+    // Refrigerant filter
+    if (criteria.refrigerant && unit.refrigerant !== criteria.refrigerant) {
+      console.log(`      REJECTED: Refrigerant mismatch: ${unit.refrigerant} vs ${criteria.refrigerant}`);
+      return false;
+    }
+    
+    // Drive type filter
+    if (criteria.driveType && unit.driveType !== criteria.driveType) {
+      console.log(`      REJECTED: Drive type mismatch: ${unit.driveType} vs ${criteria.driveType}`);
+      return false;
+    }
+    
+    console.log(`      PASSED all filters!`);
+    return true;
+  }
+
+  /**
    * Search by specification input with tiered fallback logic
    */
   public searchBySpecInput(searchInput: SpecSearchInputLegacy): DaikinUnitSpec[] {
@@ -1136,8 +1495,16 @@ export class DaikinMatcher {
         tonnage: formattedTonnage as Tonnage
       };
       
+      // For Gas/Electric searches, combine static catalog with dynamically generated candidates
+      let searchCatalog = [...DAIKIN_R32_CATALOG];
+      if (baseCriteria.systemType === "Gas/Electric") {
+        const dynamicCandidates = this.generateGasElectricCandidates(baseCriteria);
+        searchCatalog = [...searchCatalog, ...dynamicCandidates];
+        console.log(`Enhanced search catalog with ${dynamicCandidates.length} dynamic Gas/Electric candidates`);
+      }
+      
       // Tier 1: Try exact match with closest tonnage
-      let results = DAIKIN_R32_CATALOG.filter(unit => 
+      let results = searchCatalog.filter(unit => 
         this.strictExactMatch(unit, baseCriteria)
       );
       
@@ -1149,35 +1516,35 @@ export class DaikinMatcher {
       console.log(`No exact matches found for specs: ${JSON.stringify(baseCriteria)}. Trying fallback tiers...`);
       
       // Tier 2: Try nearest tonnage neighbors with same systemType and voltage/phase
-      results = this.searchNearestTonnageNeighbors(baseCriteria);
+      results = this.searchNearestTonnageNeighbors(baseCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with nearest tonnage neighbors`);
         return results;
       }
       
       // Tier 3: Try same tonnage with same systemType but any phase for selected voltage
-      results = this.searchSameVoltageAnyPhase(baseCriteria);
+      results = this.searchSameVoltageAnyPhase(baseCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with same voltage, any phase`);
         return results;
       }
       
       // Tier 4: Try same tonnage with same systemType but any available voltage/phase
-      results = this.searchAnyVoltagePhase(baseCriteria);
+      results = this.searchAnyVoltagePhase(baseCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with any voltage/phase`);
         return results;
       }
       
       // Tier 5: Final fallback - same system type with any tonnage within sizing range
-      results = this.searchSameSystemTypeAnySizing(baseCriteria);
+      results = this.searchSameSystemTypeAnySizing(baseCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with same system type, any sizing`);
         return results;
       }
       
       // Tier 6: Ultimate fallback - return best available options with size alternatives
-      results = this.searchWithSizeAlternatives(baseCriteria);
+      results = this.searchWithSizeAlternatives(baseCriteria, searchCatalog);
       if (results.length > 0) {
         console.log(`Found ${results.length} matches with size alternatives (ultimate fallback)`);
         return results;
@@ -1185,7 +1552,7 @@ export class DaikinMatcher {
       
       // Tier 7: Last resort - return some units from the same system type family
       console.log(`Applying last resort fallback for system type: ${baseCriteria.systemType}`);
-      const lastResortResults = DAIKIN_R32_CATALOG.filter(unit => 
+      const lastResortResults = searchCatalog.filter(unit => 
         this.normalizeSystemType(unit.systemType, baseCriteria.systemType)
       ).slice(0, 3); // Return up to 3 units as a last resort
       
@@ -1211,9 +1578,9 @@ export class DaikinMatcher {
   /**
    * Tier 2: Search nearest tonnage neighbors with same systemType and voltage/phase
    */
-  private searchNearestTonnageNeighbors(criteria: SpecSearchInputLegacy): DaikinUnitSpec[] {
+  private searchNearestTonnageNeighbors(criteria: SpecSearchInputLegacy, catalog: DaikinUnitSpec[] = DAIKIN_R32_CATALOG): DaikinUnitSpec[] {
     const targetTonnage = parseFloat(criteria.tonnage);
-    const availableTonnages = Array.from(new Set(DAIKIN_R32_CATALOG.map(u => parseFloat(u.tonnage))))
+    const availableTonnages = Array.from(new Set(catalog.map(u => parseFloat(u.tonnage))))
       .sort((a, b) => a - b);
     
     const currentIndex = availableTonnages.indexOf(targetTonnage);
@@ -1236,7 +1603,7 @@ export class DaikinMatcher {
         tonnage: neighborTonnage.toString() as Tonnage
       };
       
-      const matches = DAIKIN_R32_CATALOG.filter(unit => 
+      const matches = catalog.filter(unit => 
         this.strictExactMatch(unit, neighborCriteria)
       );
       results.push(...matches);
@@ -1248,7 +1615,7 @@ export class DaikinMatcher {
   /**
    * Tier 3: Search same tonnage with same systemType but any phase for selected voltage
    */
-  private searchSameVoltageAnyPhase(criteria: SpecSearchInputLegacy): DaikinUnitSpec[] {
+  private searchSameVoltageAnyPhase(criteria: SpecSearchInputLegacy, catalog: DaikinUnitSpec[] = DAIKIN_R32_CATALOG): DaikinUnitSpec[] {
     const results: DaikinUnitSpec[] = [];
     const phasesToTry: PhaseEnum[] = ["1", "3"];
     
@@ -1260,7 +1627,7 @@ export class DaikinMatcher {
         phases: phase
       };
       
-      const matches = DAIKIN_R32_CATALOG.filter(unit => 
+      const matches = catalog.filter(unit => 
         this.strictExactMatch(unit, modifiedCriteria)
       );
       results.push(...matches);
@@ -1272,7 +1639,7 @@ export class DaikinMatcher {
   /**
    * Tier 4: Search same tonnage with same systemType but any available voltage/phase
    */
-  private searchAnyVoltagePhase(criteria: SpecSearchInputLegacy): DaikinUnitSpec[] {
+  private searchAnyVoltagePhase(criteria: SpecSearchInputLegacy, catalog: DaikinUnitSpec[] = DAIKIN_R32_CATALOG): DaikinUnitSpec[] {
     const results: DaikinUnitSpec[] = [];
     const voltagesToTry: VoltageEnum[] = ["208-230", "460", "575"];
     const phasesToTry: PhaseEnum[] = ["1", "3"];
@@ -1288,7 +1655,7 @@ export class DaikinMatcher {
           phases: phase
         };
         
-        const matches = DAIKIN_R32_CATALOG.filter(unit => 
+        const matches = catalog.filter(unit => 
           this.strictExactMatch(unit, modifiedCriteria)
         );
         results.push(...matches);
@@ -1301,14 +1668,14 @@ export class DaikinMatcher {
   /**
    * Tier 5: Search same system type with any tonnage within reasonable sizing range
    */
-  private searchSameSystemTypeAnySizing(criteria: SpecSearchInputLegacy): DaikinUnitSpec[] {
+  private searchSameSystemTypeAnySizing(criteria: SpecSearchInputLegacy, catalog: DaikinUnitSpec[] = DAIKIN_R32_CATALOG): DaikinUnitSpec[] {
     const targetTonnage = parseFloat(criteria.tonnage);
     
     // Define reasonable sizing range (±40% of target tonnage)
     const minTonnage = targetTonnage * 0.6;
     const maxTonnage = targetTonnage * 1.4;
     
-    return DAIKIN_R32_CATALOG.filter(unit => {
+    return catalog.filter(unit => {
       const unitTonnage = parseFloat(unit.tonnage);
       return (
         this.normalizeSystemType(unit.systemType, criteria.systemType) &&
@@ -1321,14 +1688,14 @@ export class DaikinMatcher {
   /**
    * Tier 6: Ultimate fallback - return size alternatives with any voltage/phase
    */
-  private searchWithSizeAlternatives(criteria: SpecSearchInputLegacy): DaikinUnitSpec[] {
+  private searchWithSizeAlternatives(criteria: SpecSearchInputLegacy, catalog: DaikinUnitSpec[] = DAIKIN_R32_CATALOG): DaikinUnitSpec[] {
     const targetTonnage = parseFloat(criteria.tonnage);
     const sizingOptions = this.getDaikinSizingOptions(targetTonnage);
     
     const results: DaikinUnitSpec[] = [];
     
     // Try direct match tonnage first
-    const directMatches = DAIKIN_R32_CATALOG.filter(unit => {
+    const directMatches = catalog.filter(unit => {
       const unitTonnage = parseFloat(unit.tonnage);
       return (
         this.normalizeSystemType(unit.systemType, criteria.systemType) &&
@@ -1339,7 +1706,7 @@ export class DaikinMatcher {
     
     // Then try up sizing option
     if (sizingOptions.up) {
-      const upMatches = DAIKIN_R32_CATALOG.filter(unit => {
+      const upMatches = catalog.filter(unit => {
         const unitTonnage = parseFloat(unit.tonnage);
         return (
           this.normalizeSystemType(unit.systemType, criteria.systemType) &&
@@ -1351,7 +1718,7 @@ export class DaikinMatcher {
     
     // Finally try down sizing option
     if (sizingOptions.down) {
-      const downMatches = DAIKIN_R32_CATALOG.filter(unit => {
+      const downMatches = catalog.filter(unit => {
         const unitTonnage = parseFloat(unit.tonnage);
         return (
           this.normalizeSystemType(unit.systemType, criteria.systemType) &&
@@ -1363,7 +1730,7 @@ export class DaikinMatcher {
     
     // If still no results, return any units of the same system type
     if (results.length === 0) {
-      return DAIKIN_R32_CATALOG.filter(unit => 
+      return catalog.filter(unit => 
         this.normalizeSystemType(unit.systemType, criteria.systemType)
       ).slice(0, 5); // Limit to 5 results
     }

@@ -228,7 +228,15 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
                                 placeholder="80000"
                                 data-testid="input-heating-btu"
                                 {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
+                                onChange={(e) => {
+                                  const value = e.target.value.trim();
+                                  if (value === '') {
+                                    field.onChange(undefined);
+                                  } else {
+                                    const parsedValue = parseInt(value, 10);
+                                    field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                                  }
+                                }}
                               />
                             </FormControl>
                             <FormDescription>
@@ -284,7 +292,15 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
                               placeholder="10"
                               data-testid="input-heat-kit-kw"
                               {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                              onChange={(e) => {
+                                const value = e.target.value.trim();
+                                if (value === '') {
+                                  field.onChange(undefined);
+                                } else {
+                                  const parsedValue = parseFloat(value);
+                                  field.onChange(isNaN(parsedValue) ? undefined : parsedValue);
+                                }
+                              }}
                             />
                           </FormControl>
                           <FormDescription>
