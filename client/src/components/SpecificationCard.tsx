@@ -3,11 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Thermometer, Zap, Gauge, Fan, Edit2, Settings, Wrench, ChevronDown, ChevronUp } from "lucide-react";
+import { Thermometer, Zap, Gauge, Fan, Edit2, Settings, Wrench, ChevronDown, ChevronUp, AlertTriangle, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import EditableSpecificationForm from "./EditableSpecificationForm";
 import AccessoryManagement from "./AccessoryManagement";
-import { DaikinFamilyKeys } from "@shared/schema";
+import { CorrectionDialog, FeedbackDialog, QuickFeedback } from "@/components/learning";
+import { DaikinFamilyKeys, type ParsedModel } from "@shared/schema";
 
 interface Specification {
   label: string;
@@ -35,6 +36,13 @@ interface SpecificationCardProps {
   selectedFieldAccessories?: string[];
   onFactoryOptionsChange?: (selectedOptions: string[]) => void;
   onFieldAccessoriesChange?: (selectedAccessories: string[]) => void;
+  // Learning system integration
+  enableLearning?: boolean;
+  sessionId?: string;
+  originalModelNumber?: string;
+  originalParsedData?: ParsedModelData;
+  suggestedMatches?: ModelSpecification[];
+  showLearningFeedback?: boolean;
 }
 
 export default function SpecificationCard({
@@ -54,10 +62,19 @@ export default function SpecificationCard({
   selectedFactoryOptions = [],
   selectedFieldAccessories = [],
   onFactoryOptionsChange,
-  onFieldAccessoriesChange
+  onFieldAccessoriesChange,
+  // Learning system props
+  enableLearning = false,
+  sessionId = "anonymous",
+  originalModelNumber,
+  originalParsedData,
+  suggestedMatches = [],
+  showLearningFeedback = false
 }: SpecificationCardProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showAccessoriesSection, setShowAccessoriesSection] = useState(false);
+  const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const systemTypeColors = {
     "Heat Pump": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     "Gas/Electric": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200", 
@@ -216,7 +233,76 @@ export default function SpecificationCard({
             </Collapsible>
           </>
         )}
+
+        {/* Learning System Feedback Section */}
+        {enableLearning && showLearningFeedback && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <QuickFeedback
+                  type={isOriginal ? "parsing" : "matching"}
+                  modelNumber={originalModelNumber || modelNumber}
+                  sessionId={sessionId}
+                  onDetailedFeedback={() => {
+                    if (isOriginal && originalParsedData) {
+                      setShowCorrectionDialog(true);
+                    } else if (!isOriginal && suggestedMatches.length > 0) {
+                      setShowFeedbackDialog(true);
+                    }
+                  }}
+                />
+                
+                {(isOriginal && originalParsedData) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowCorrectionDialog(true)}
+                    data-testid="button-report-parsing-error"
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Report Error
+                  </Button>
+                )}
+                
+                {(!isOriginal && suggestedMatches.length > 0) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowFeedbackDialog(true)}
+                    data-testid="button-rate-match"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Rate Match
+                  </Button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </CardContent>
+
+      {/* Learning System Dialogs */}
+      {enableLearning && originalParsedData && (
+        <CorrectionDialog
+          open={showCorrectionDialog}
+          onOpenChange={setShowCorrectionDialog}
+          originalModelNumber={originalModelNumber || modelNumber}
+          originalParsedData={originalParsedData}
+          sessionId={sessionId}
+        />
+      )}
+
+      {enableLearning && suggestedMatches.length > 0 && originalParsedData && (
+        <FeedbackDialog
+          open={showFeedbackDialog}
+          onOpenChange={setShowFeedbackDialog}
+          originalModelNumber={originalModelNumber || modelNumber}
+          parsedSpecs={originalParsedData}
+          suggestedMatches={suggestedMatches}
+          sessionId={sessionId}
+        />
+      )}
     </Card>
   );
 }

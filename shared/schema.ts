@@ -1204,3 +1204,324 @@ export const apiErrorResponseSchema = z.union([
 ]);
 
 export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
+
+// ============================================================================
+// SELF-LEARNING & ADAPTATION SYSTEM SCHEMAS
+// ============================================================================
+
+// Correction types for learning system
+export const correctionTypeEnum = z.enum([
+  "manufacturer_fix", 
+  "model_parsing_fix", 
+  "capacity_fix", 
+  "voltage_fix", 
+  "system_type_fix"
+]);
+export type CorrectionType = z.infer<typeof correctionTypeEnum>;
+
+// Feedback types for match quality
+export const feedbackTypeEnum = z.enum([
+  "perfect_match", 
+  "good_match", 
+  "poor_match", 
+  "wrong_match", 
+  "user_rejected"
+]);
+export type FeedbackType = z.infer<typeof feedbackTypeEnum>;
+
+// User corrections table - tracks when users correct parsed model numbers
+export const userCorrections = pgTable("user_corrections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"), // Optional - can be anonymous
+  sessionId: varchar("session_id").notNull(), // Track anonymous sessions
+  
+  // Original input data
+  originalModelNumber: text("original_model_number").notNull(),
+  originalParsedData: json("original_parsed_data").notNull(), // ParsedModel JSON
+  
+  // User-corrected data  
+  correctedParsedData: json("corrected_parsed_data").notNull(), // Corrected ParsedModel JSON
+  correctionType: text("correction_type").notNull(), // Type of correction made
+  correctionReason: text("correction_reason"), // Optional user explanation
+  
+  // Learning metadata
+  confidence: real("confidence").default(1.0), // Confidence in this correction (0-1)
+  appliedToPattern: boolean("applied_to_pattern").default(false), // Whether this correction updated patterns
+  patternVersion: integer("pattern_version"), // Pattern version when correction was made
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// Pattern learning table - stores manufacturer pattern adaptations and versions
+export const patternLearning = pgTable("pattern_learning", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  manufacturer: text("manufacturer").notNull(),
+  patternType: text("pattern_type").notNull(), // "regex", "lookup", "hybrid"
+  
+  // Pattern versioning
+  version: integer("version").notNull().default(1),
+  parentVersion: integer("parent_version"), // Version this was derived from
+  isActive: boolean("is_active").default(true),
+  
+  // Pattern definition
+  patternDefinition: json("pattern_definition").notNull(), // Regex patterns, lookup tables, etc.
+  parsingLogic: json("parsing_logic").notNull(), // How to extract data from matches
+  
+  // Performance metrics
+  successRate: real("success_rate").default(0), // Success rate (0-1)
+  correctionCount: integer("correction_count").default(0), // Times corrected by users
+  usageCount: integer("usage_count").default(0), // Times pattern was used
+  confidenceScore: real("confidence_score").default(0.5), // Overall confidence (0-1)
+  
+  // Learning metadata
+  learnedFromCorrections: json("learned_from_corrections").default([]), // Array of correction IDs
+  createdBySystem: boolean("created_by_system").default(true), // vs manual creation
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// Match feedback table - tracks user feedback on replacement matches
+export const matchFeedback = pgTable("match_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"), // Optional
+  sessionId: varchar("session_id").notNull(),
+  
+  // Original query data
+  originalModelNumber: text("original_model_number").notNull(),
+  parsedSpecs: json("parsed_specs").notNull(), // Original parsed specifications
+  
+  // Match data
+  suggestedMatches: json("suggested_matches").notNull(), // Array of suggested Daikin matches
+  chosenMatchId: varchar("chosen_match_id"), // Which match user selected
+  alternativeMatches: json("alternative_matches").default([]), // Other matches user considered
+  
+  // Feedback details
+  feedbackType: text("feedback_type").notNull(), // perfect_match, good_match, etc.
+  feedbackRating: integer("feedback_rating"), // 1-5 rating
+  feedbackComments: text("feedback_comments"), // Optional user comments
+  
+  // Match quality metrics
+  capacityMatchQuality: real("capacity_match_quality"), // How well capacity matched (0-1)
+  specificationMatchQuality: real("specification_match_quality"), // Overall spec match (0-1)
+  userSatisfactionScore: real("user_satisfaction_score"), // User satisfaction (0-1)
+  
+  // Learning application
+  appliedToMatcher: boolean("applied_to_matcher").default(false), // Whether feedback improved matcher
+  matcherVersion: integer("matcher_version"), // Matcher version when feedback was given
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// Spec updates table - version control for specification data updates
+export const specUpdates = pgTable("spec_updates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  updateType: text("update_type").notNull(), // "new_model", "spec_correction", "data_enhancement"
+  
+  // Updated model information
+  manufacturerName: text("manufacturer_name").notNull(),
+  modelNumber: text("model_number").notNull(),
+  
+  // Version tracking
+  version: integer("version").notNull().default(1),
+  previousVersion: integer("previous_version"), // Previous version reference
+  
+  // Update details
+  changedFields: json("changed_fields").notNull(), // What fields were updated
+  oldData: json("old_data"), // Previous specification data
+  newData: json("new_data").notNull(), // New specification data
+  changeReason: text("change_reason").notNull(), // Why the update was made
+  
+  // Validation and approval
+  isValidated: boolean("is_validated").default(false), // Whether update has been validated
+  validatedBy: varchar("validated_by"), // User/system that validated
+  validationNotes: text("validation_notes"), // Validation comments
+  
+  // Source tracking
+  sourceType: text("source_type").notNull(), // "user_correction", "spec_sheet", "manufacturer_update"
+  sourceReference: text("source_reference"), // Reference to source document/correction
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// Learning metrics table - analytics and performance tracking
+export const learningMetrics = pgTable("learning_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  metricType: text("metric_type").notNull(), // "parsing_accuracy", "match_quality", "user_satisfaction"
+  
+  // Time period
+  measurementDate: timestamp("measurement_date").notNull().default(sql`CURRENT_TIMESTAMP`),
+  periodType: text("period_type").notNull(), // "daily", "weekly", "monthly"
+  
+  // Performance metrics
+  successRate: real("success_rate").notNull(), // Overall success rate (0-1)
+  improvementRate: real("improvement_rate"), // Rate of improvement over previous period
+  errorRate: real("error_rate").notNull(), // Error rate (0-1)
+  correctionFrequency: real("correction_frequency"), // How often corrections are needed
+  
+  // User engagement metrics
+  userSatisfactionAvg: real("user_satisfaction_avg"), // Average satisfaction (0-1)
+  feedbackVolume: integer("feedback_volume"), // Number of feedback submissions
+  activeUsers: integer("active_users"), // Number of active users in period
+  
+  // System performance
+  parsingSpeed: real("parsing_speed"), // Average parsing time (ms)
+  matchAccuracy: real("match_accuracy"), // Match recommendation accuracy (0-1)
+  patternCoverage: real("pattern_coverage"), // Percentage of models covered by patterns
+  
+  // Learning progress
+  newPatternsLearned: integer("new_patterns_learned"), // New patterns added in period
+  patternsImproved: integer("patterns_improved"), // Existing patterns improved
+  totalPatternsActive: integer("total_patterns_active"), // Total active patterns
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// Manufacturer patterns table - dynamic patterns learned from corrections
+export const manufacturerPatterns = pgTable("manufacturer_patterns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  manufacturer: text("manufacturer").notNull(),
+  patternName: text("pattern_name").notNull(),
+  
+  // Pattern definition
+  regexPattern: text("regex_pattern").notNull(), // The actual regex pattern
+  extractionRules: json("extraction_rules").notNull(), // How to extract model data
+  validationRules: json("validation_rules").default([]), // Rules to validate extractions
+  
+  // Pattern metadata
+  description: text("description"), // Human-readable pattern description
+  examples: json("examples").default([]), // Example model numbers this pattern matches
+  counterExamples: json("counter_examples").default([]), // Models it should NOT match
+  
+  // Performance tracking
+  matchCount: integer("match_count").default(0), // How many models matched
+  successCount: integer("success_count").default(0), // How many successful extractions
+  errorCount: integer("error_count").default(0), // How many extraction errors
+  lastUsed: timestamp("last_used"), // When pattern was last used
+  
+  // Learning information
+  learnedFromModelNumbers: json("learned_from_model_numbers").default([]), // Source models
+  confidence: real("confidence").default(0.5), // Pattern confidence (0-1)
+  priority: integer("priority").default(100), // Pattern matching priority
+  isLearned: boolean("is_learned").default(true), // vs manually created
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  needsReview: boolean("needs_review").default(false), // Flag for manual review
+  
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// Insert schemas for learning tables
+export const insertUserCorrectionSchema = createInsertSchema(userCorrections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertPatternLearningSchema = createInsertSchema(patternLearning).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertMatchFeedbackSchema = createInsertSchema(matchFeedback).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertSpecUpdateSchema = createInsertSchema(specUpdates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertLearningMetricSchema = createInsertSchema(learningMetrics).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertManufacturerPatternSchema = createInsertSchema(manufacturerPatterns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+// Type definitions for learning schemas
+export type InsertUserCorrection = z.infer<typeof insertUserCorrectionSchema>;
+export type InsertPatternLearning = z.infer<typeof insertPatternLearningSchema>;
+export type InsertMatchFeedback = z.infer<typeof insertMatchFeedbackSchema>;
+export type InsertSpecUpdate = z.infer<typeof insertSpecUpdateSchema>;
+export type InsertLearningMetric = z.infer<typeof insertLearningMetricSchema>;
+export type InsertManufacturerPattern = z.infer<typeof insertManufacturerPatternSchema>;
+
+export type UserCorrection = typeof userCorrections.$inferSelect;
+export type PatternLearning = typeof patternLearning.$inferSelect;
+export type MatchFeedback = typeof matchFeedback.$inferSelect;
+export type SpecUpdate = typeof specUpdates.$inferSelect;
+export type LearningMetric = typeof learningMetrics.$inferSelect;
+export type ManufacturerPattern = typeof manufacturerPatterns.$inferSelect;
+
+// API request/response schemas for learning endpoints
+export const submitCorrectionRequestSchema = z.object({
+  originalModelNumber: z.string().min(1),
+  originalParsedData: parsedModelSchema,
+  correctedParsedData: parsedModelSchema,
+  correctionType: correctionTypeEnum,
+  correctionReason: z.string().optional(),
+  sessionId: z.string().min(1)
+});
+
+export const submitMatchFeedbackRequestSchema = z.object({
+  originalModelNumber: z.string().min(1),
+  parsedSpecs: z.any(), // ParsedModel or similar
+  suggestedMatches: z.array(enhancedReplacementSchema),
+  chosenMatchId: z.string().optional(),
+  feedbackType: feedbackTypeEnum,
+  feedbackRating: z.number().min(1).max(5).optional(),
+  feedbackComments: z.string().optional(),
+  sessionId: z.string().min(1)
+});
+
+export const learningAnalyticsRequestSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  metricTypes: z.array(z.string()).optional(),
+  manufacturer: z.string().optional()
+});
+
+export const learningAnalyticsResponseSchema = z.object({
+  metrics: z.array(z.object({
+    metricType: z.string(),
+    measurementDate: z.string(),
+    successRate: z.number(),
+    improvementRate: z.number().nullable(),
+    errorRate: z.number(),
+    userSatisfactionAvg: z.number().nullable(),
+    feedbackVolume: z.number(),
+    newPatternsLearned: z.number(),
+    patternsImproved: z.number()
+  })),
+  summary: z.object({
+    totalCorrections: z.number(),
+    totalFeedback: z.number(),
+    averageAccuracy: z.number(),
+    activePatternsCount: z.number(),
+    topManufacturers: z.array(z.string()),
+    improvementTrends: z.object({
+      parsingAccuracy: z.string(), // "improving", "stable", "declining"
+      matchQuality: z.string(),
+      userSatisfaction: z.string()
+    })
+  })
+});
+
+export type SubmitCorrectionRequest = z.infer<typeof submitCorrectionRequestSchema>;
+export type SubmitMatchFeedbackRequest = z.infer<typeof submitMatchFeedbackRequestSchema>;
+export type LearningAnalyticsRequest = z.infer<typeof learningAnalyticsRequestSchema>;
+export type LearningAnalyticsResponse = z.infer<typeof learningAnalyticsResponseSchema>;

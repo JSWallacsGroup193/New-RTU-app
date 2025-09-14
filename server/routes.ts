@@ -26,7 +26,12 @@ import {
   updateProjectRequestSchema,
   addUnitToProjectRequestSchema,
   projectListResponseSchema,
-  projectDetailResponseSchema
+  projectDetailResponseSchema,
+  // Learning system schemas
+  submitCorrectionRequestSchema,
+  submitMatchFeedbackRequestSchema,
+  learningAnalyticsRequestSchema,
+  learningAnalyticsResponseSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { ALL_MODEL_SPECIFICATIONS, type ModelSpecification } from "./data/daikinCatalog";
@@ -1516,7 +1521,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================================================
+  // LEARNING SYSTEM API ENDPOINTS
+  // ============================================================================
+
+  // Submit user correction for learning
+  app.post("/api/learning/corrections", async (req, res) => {
+    try {
+      const correctionData = submitCorrectionRequestSchema.parse(req.body);
+      
+      // Store the user correction
+      const correction = await storage.createUserCorrection({
+        userId: undefined, // Anonymous for now
+        sessionId: correctionData.sessionId,
+        originalModelNumber: correctionData.originalModelNumber,
+        originalParsedData: correctionData.originalParsedData,
+        correctedParsedData: correctionData.correctedParsedData,
+        correctionType: correctionData.correctionType,
+        correctionReason: correctionData.correctionReason,
+        confidence: 0.9 // High confidence for user corrections
+      });
+
+      res.json({
+        success: true,
+        correctionId: correction.id,
+        message: "Correction recorded successfully. Thank you for helping improve the system!",
+        learningStatus: "pending_pattern_update"
+      });
+
+    } catch (error) {
+      console.error("Error recording user correction:", error);
+      return res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to record user correction"
+      });
+    }
+  });
+
+  // Submit match feedback for learning
+  app.post("/api/learning/feedback", async (req, res) => {
+    try {
+      const feedbackData = submitMatchFeedbackRequestSchema.parse(req.body);
+      
+      // Calculate quality metrics
+      const userSatisfactionScore = mapFeedbackTypeToSatisfaction(feedbackData.feedbackType);
+
+      // Store the match feedback
+      const feedback = await storage.createMatchFeedback({
+        userId: undefined, // Anonymous for now
+        sessionId: feedbackData.sessionId,
+        originalModelNumber: feedbackData.originalModelNumber,
+        parsedSpecs: feedbackData.parsedSpecs,
+        suggestedMatches: feedbackData.suggestedMatches,
+        chosenMatchId: feedbackData.chosenMatchId,
+        alternativeMatches: [],
+        feedbackType: feedbackData.feedbackType,
+        feedbackRating: feedbackData.feedbackRating,
+        feedbackComments: feedbackData.feedbackComments,
+        capacityMatchQuality: null,
+        specificationMatchQuality: null,
+        userSatisfactionScore
+      });
+
+      res.json({
+        success: true,
+        feedbackId: feedback.id,
+        message: "Feedback recorded successfully. This helps improve our matching accuracy!",
+        learningStatus: "pending_matcher_update"
+      });
+
+    } catch (error) {
+      console.error("Error recording match feedback:", error);
+      return res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to record match feedback"
+      });
+    }
+  });
+
+  // Get learning analytics dashboard data
+  app.get("/api/learning/analytics", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      
+      const analytics = await storage.getLearningAnalytics(start, end);
+      
+      res.json({
+        summary: {
+          totalCorrections: analytics.totalCorrections,
+          totalFeedback: analytics.totalFeedback,
+          averageAccuracy: analytics.averageAccuracy,
+          activePatternsCount: analytics.activePatternsCount,
+          topManufacturers: analytics.topManufacturers,
+          improvementTrends: analytics.improvementTrends
+        }
+      });
+
+    } catch (error) {
+      console.error("Error fetching learning analytics:", error);
+      return res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch learning analytics"
+      });
+    }
+  });
+
+  // Get user corrections for analysis
+  app.get("/api/learning/corrections", async (req, res) => {
+    try {
+      const { sessionId, modelNumber, limit = "50" } = req.query;
+      
+      let corrections;
+      if (modelNumber && typeof modelNumber === "string") {
+        corrections = await storage.getUserCorrectionsByModelNumber(modelNumber);
+      } else {
+        corrections = await storage.getUserCorrections(sessionId as string);
+      }
+      
+      const limitNum = parseInt(limit as string);
+      const limitedCorrections = corrections.slice(0, limitNum);
+      
+      res.json({
+        corrections: limitedCorrections.map(correction => ({
+          id: correction.id,
+          originalModelNumber: correction.originalModelNumber,
+          correctionType: correction.correctionType,
+          createdAt: correction.createdAt.toISOString()
+        })),
+        total: corrections.length
+      });
+
+    } catch (error) {
+      console.error("Error fetching user corrections:", error);
+      return res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch user corrections"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
+}
+
+// Helper function for learning system
+function mapFeedbackTypeToSatisfaction(feedbackType: string): number {
+  const mapping: Record<string, number> = {
+    'perfect_match': 1.0,
+    'good_match': 0.8,
+    'poor_match': 0.4,
+    'wrong_match': 0.1,
+    'user_rejected': 0.0
+  };
+  
+  return mapping[feedbackType] || 0.5;
 }
