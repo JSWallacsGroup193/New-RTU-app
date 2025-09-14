@@ -120,8 +120,10 @@ export default function ProductSpecificationTabs({
     queryFn: async () => {
       if (!modelNumber) return null;
       try {
-        const response = await apiRequest(`/api/specifications/${modelNumber}`);
-        return response;
+        const response = await fetch(`/api/specifications/${modelNumber}`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data as ModelSpecification;
       } catch (error) {
         console.error('Error fetching specifications:', error);
         return null;

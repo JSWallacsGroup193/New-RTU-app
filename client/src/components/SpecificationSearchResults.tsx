@@ -27,7 +27,7 @@ import {
   Plus
 } from "lucide-react";
 import { useState, useMemo } from "react";
-import { SpecSearchResponse, type SpecSearchInput } from "@shared/schema";
+import { SpecSearchResponse, type SpecSearchInput, parseCombinedVoltage, DaikinFamilyKeys } from "@shared/schema";
 import EnhancedUnitCard from "./EnhancedUnitCard";
 import InlineEditControls from "./InlineEditControls";
 import SystemTypeFilter from "./SystemTypeFilter";
@@ -36,6 +36,40 @@ import CreateProjectForm from "./CreateProjectForm";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { exportSingleComparison, exportBulkComparison } from "@/lib/pdfService";
+
+// Helper function to determine family from model number
+const getFamilyFromModelNumber = (modelNumber: string): DaikinFamilyKeys | undefined => {
+  if (!modelNumber || modelNumber.length < 3) return undefined;
+  
+  const prefix = modelNumber.substring(0, 3).toUpperCase();
+  
+  // Handle DSH variants based on capacity
+  if (prefix === "DSH") {
+    // Extract capacity to determine DSH variant
+    const capacityMatch = modelNumber.match(/\d{3}/);
+    if (capacityMatch) {
+      const capacity = parseInt(capacityMatch[0]);
+      // 036-072 = 3-6 tons, 090-120 = 7.5-10 tons
+      if (capacity >= 36 && capacity <= 72) {
+        return "DSH_3to6";
+      } else if (capacity >= 90 && capacity <= 120) {
+        return "DSH_7p5to10";
+      }
+    }
+    return "DSH_3to6"; // Default fallback
+  }
+  
+  // Standard family mapping
+  const familyMap: Record<string, DaikinFamilyKeys> = {
+    "DSC": "DSC",
+    "DHC": "DHC", 
+    "DSG": "DSG",
+    "DHG": "DHG",
+    "DHH": "DHH"
+  };
+  
+  return familyMap[prefix];
+};
 
 // Authentic Daikin catalog data
 const ELECTRICAL_ADD_ONS = [
@@ -465,7 +499,7 @@ export default function SpecificationSearchResults({
     }
 
     // Check project capacity before saving
-    const selectedProject = projects.find(p => p.id === selectedProjectId);
+    const selectedProject = projects.find((p: any) => p.id === selectedProjectId);
     if (selectedProject) {
       const currentUnits = selectedProject.items?.length || 0;
       const totalAfterSave = currentUnits + selectedEnhancedUnits.length;
@@ -481,19 +515,20 @@ export default function SpecificationSearchResults({
     }
 
     // Create original unit from search parameters for comparison
+    const { voltage: parsedVoltage, phases: parsedPhases } = parseCombinedVoltage(searchParams.voltage);
     const originalUnit = {
       modelNumber: "Search Specifications",
       manufacturer: "Various",
       confidence: 100,
       systemType: searchParams.systemType,
       btuCapacity: parseFloat(searchParams.tonnage) * 12000,
-      voltage: searchParams.voltage,
-      phases: searchParams.phases,
+      voltage: parsedVoltage,
+      phases: parsedPhases,
       specifications: [
         { label: "System Type", value: searchParams.systemType },
         { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" },
-        { label: "Voltage", value: searchParams.voltage, unit: "V" },
-        { label: "Phases", value: searchParams.phases }
+        { label: "Voltage", value: parsedVoltage, unit: "V" },
+        { label: "Phases", value: parsedPhases }
       ]
     };
 
@@ -564,19 +599,20 @@ export default function SpecificationSearchResults({
       const selectedEnhancedUnits = filteredAndSortedUnits.filter(unit => selectedUnits.has(unit.id));
       
       // Create "original unit" from search parameters for comparison
+      const { voltage: parsedVoltage, phases: parsedPhases } = parseCombinedVoltage(searchParams.voltage);
       const originalUnit = {
         modelNumber: "Search Specifications",
         manufacturer: "Various",
         confidence: 100,
         systemType: searchParams.systemType,
         btuCapacity: parseFloat(searchParams.tonnage) * 12000, // Convert tonnage to BTU
-        voltage: searchParams.voltage,
-        phases: searchParams.phases,
+        voltage: parsedVoltage,
+        phases: parsedPhases,
         specifications: [
           { label: "System Type", value: searchParams.systemType },
           { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" },
-          { label: "Voltage", value: searchParams.voltage, unit: "V" },
-          { label: "Phases", value: searchParams.phases },
+          { label: "Voltage", value: parsedVoltage, unit: "V" },
+          { label: "Phases", value: parsedPhases },
           { label: "Efficiency", value: searchParams.efficiency },
           ...(searchParams.heatingBTU ? [{ label: "Heating BTU", value: searchParams.heatingBTU.toString(), unit: " BTU/hr" }] : []),
           ...(searchParams.gasCategory ? [{ label: "Gas Type", value: searchParams.gasCategory }] : [])
@@ -638,19 +674,20 @@ export default function SpecificationSearchResults({
     setIsExporting(true);
     try {
       // Create "original unit" from search parameters for comparison
+      const { voltage: parsedVoltage, phases: parsedPhases } = parseCombinedVoltage(searchParams.voltage);
       const originalUnit = {
         modelNumber: "Search Specifications",
         manufacturer: "Various",
         confidence: 100,
         systemType: searchParams.systemType,
         btuCapacity: parseFloat(searchParams.tonnage) * 12000,
-        voltage: searchParams.voltage,
-        phases: searchParams.phases,
+        voltage: parsedVoltage,
+        phases: parsedPhases,
         specifications: [
           { label: "System Type", value: searchParams.systemType },
           { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" },
-          { label: "Voltage", value: searchParams.voltage, unit: "V" },
-          { label: "Phases", value: searchParams.phases },
+          { label: "Voltage", value: parsedVoltage, unit: "V" },
+          { label: "Phases", value: parsedPhases },
           { label: "Efficiency", value: searchParams.efficiency }
         ]
       };
@@ -767,11 +804,11 @@ export default function SpecificationSearchResults({
               </div>
               <div>
                 <span className="text-muted-foreground">Voltage:</span>
-                <div className="font-medium">{searchParams.voltage}V</div>
+                <div className="font-medium">{parseCombinedVoltage(searchParams.voltage).voltage}V</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Phases:</span>
-                <div className="font-medium">{searchParams.phases} Phase</div>
+                <div className="font-medium">{parseCombinedVoltage(searchParams.voltage).phases} Phase</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Efficiency:</span>
@@ -1095,6 +1132,7 @@ export default function SpecificationSearchResults({
                 onViewDetails={handleViewDetails}
                 onAddToProject={handleAddToProject}
                 onGenerateQuote={handleGenerateQuote}
+                family={getFamilyFromModelNumber(unit.modelNumber)}
               />
             ))}
           </div>
@@ -1168,8 +1206,8 @@ export default function SpecificationSearchResults({
                 confidence: 100,
                 systemType: searchParams.systemType,
                 btuCapacity: parseFloat(searchParams.tonnage) * 12000,
-                voltage: searchParams.voltage,
-                phases: searchParams.phases,
+                voltage: parseCombinedVoltage(searchParams.voltage).voltage,
+                phases: parseCombinedVoltage(searchParams.voltage).phases,
                 specifications: [
                   { label: "System Type", value: searchParams.systemType },
                   { label: "Tonnage", value: searchParams.tonnage, unit: " Tons" }
