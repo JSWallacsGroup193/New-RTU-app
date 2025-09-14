@@ -440,7 +440,7 @@ export class PDFService {
     const originalSeer = this.getSpecValue(original.specifications, 'SEER2 Rating') || 
                         this.getSpecValue(original.specifications, 'SEER') || 
                         'N/A';
-    const replacementSeer = replacement.seerRating || 
+    const replacementSeer = replacement.seerRating ? replacement.seerRating.toString() : 
                            this.getSpecValue(replacement.specifications, 'SEER') || 
                            'N/A';
 

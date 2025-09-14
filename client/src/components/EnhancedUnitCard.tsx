@@ -285,18 +285,7 @@ export default function EnhancedUnitCard({
       },
       {
         position: "Position 7",
-        code: model.charAt(6) || "D",
-        description: "Fan/Drive Type", 
-        options: [
-          { value: "D", description: "Direct Drive" },
-          { value: "L", description: "Medium Static" },
-          { value: "W", description: "High Static" }
-        ],
-        selectedValue: model.charAt(6) || "D"
-      },
-      {
-        position: "Position 8",
-        code: model.charAt(7) || "3",
+        code: model.charAt(6) || "3",
         description: "Voltage/Phase",
         options: [
           { value: "1", description: "208/230V 1φ" },
@@ -304,7 +293,18 @@ export default function EnhancedUnitCard({
           { value: "4", description: "460V 3φ" },
           { value: "7", description: "575V 3φ" }
         ],
-        selectedValue: model.charAt(7) || "3"
+        selectedValue: model.charAt(6) || "3"
+      },
+      {
+        position: "Position 8",
+        code: model.charAt(7) || "D",
+        description: "Fan/Drive Type", 
+        options: [
+          { value: "D", description: "Direct Drive" },
+          { value: "L", description: "Medium Static" },
+          { value: "W", description: "High Static" }
+        ],
+        selectedValue: model.charAt(7) || "D"
       }
     ];
   };
