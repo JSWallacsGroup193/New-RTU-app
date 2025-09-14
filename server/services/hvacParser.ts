@@ -868,73 +868,114 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       };
     }
   },
-  // DAIKIN R-32 PACKAGE UNITS (Commercial)
+  // DAIKIN R-32 PACKAGE UNITS (Commercial) - 24-Position Nomenclature
   {
     name: "Daikin",
     patterns: [
-      // Daikin R-32 models: DSC036D1XXXCAXAXADXXXXXXX, DHC048D1XXXBAXAXADXXXXXXX, etc.
-      /^(DSC|DHC|DHG|DHH|DSG|DSH)([0-9]{3})([A-Z])([0-9])[A-Z0-9]*$/i, 
-      // Legacy patterns for older Daikin models
+      // Daikin R-32 24-position nomenclature: DHG036D1DXXXCAXAXADXXXXXXX based on official spec sheets
+      // Position: D(1) H(2) G(3) 036(4-6) 1(7) D(8) XXX(9-11) C(12) A(13) A(14) X(15-24)
+      /^D([SH])([CGH])([0-9]{3})([1347])([DLW])[A-Z0-9]{15}$/i,
+      // Legacy patterns for older Daikin models  
       /^(DX|DZ)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const seriesPrefix = match[1];
-      const sizeCode = match[2];
-      const voltageCode = match[3]; // Position 7 voltage code
-      const phaseCode = match[4]; // Position 8 phase code
+      // Check if this is a legacy pattern (DX/DZ)
+      if (match[1] && ["DX", "DZ"].includes(match[1].toUpperCase())) {
+        const seriesPrefix = match[1];
+        const sizeCode = match[2];
+        const btuCapacity = BTU_MAPPINGS.asian[sizeCode];
+        if (!btuCapacity) return null;
+        
+        const systemType = seriesPrefix.toUpperCase() === "DZ" ? "Heat Pump" : "Straight A/C";
+        
+        return {
+          manufacturer: "Daikin",
+          confidence: 85,
+          systemType: systemType as any,
+          btuCapacity,
+          voltage: "208-230",
+          phases: "1",
+          specifications: [
+            { label: "SEER2 Rating", value: "20.0" },
+            { label: "Refrigerant", value: "R-410A" },
+            { label: "Sound Level", value: "62", unit: "dB" },
+            { label: "Series", value: seriesPrefix.toUpperCase() },
+            { label: "Application", value: "Legacy Package Unit" }
+          ]
+        };
+      }
       
-      // Use proper Daikin R-32 BTU mapping for new series, Asian mapping for legacy
-      const isR32Series = ["DSC", "DHC", "DHG", "DHH", "DSG", "DSH"].includes(seriesPrefix.toUpperCase());
-      const btuCapacity = isR32Series ? 
-        BTU_MAPPINGS.daikin_r32[sizeCode] : 
-        BTU_MAPPINGS.asian[sizeCode];
+      // R-32 24-position nomenclature parsing
+      const efficiencyCode = match[1]; // Position 2: S=Standard, H=High Efficiency
+      const applicationCode = match[2]; // Position 3: C=Cooling, G=Gas, H=Heat Pump
+      const capacityCode = match[3]; // Positions 4-6: 036, 048, 060, etc.
+      const voltageCode = match[4]; // Position 7: 1,3,4,7 for voltage/phase combinations
+      const fanDriveCode = match[5]; // Position 8: D=Direct Standard, L=Medium, W=High Static
       
+      // Lookup BTU capacity using official Daikin R-32 mapping
+      const btuCapacity = BTU_MAPPINGS.daikin_r32[capacityCode];
       if (!btuCapacity) return null;
       
-      // Extract voltage and phase from position codes for R-32 series
-      let voltage = "208-230";
-      let phases = "1";
-      
-      if (isR32Series && voltageCode && phaseCode) {
-        voltage = VOLTAGE_MAPPINGS[voltageCode] || "208-230";
-        phases = PHASE_MAPPINGS[phaseCode] || "1";
-      }
-      
-      // Determine system type based on series prefix
+      // Determine system type from application code (position 3)
       let systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-      if (["DHH", "DSH"].includes(seriesPrefix.toUpperCase())) {
-        systemType = "Heat Pump";
-      } else if (["DHG", "DSG"].includes(seriesPrefix.toUpperCase())) {
-        systemType = "Gas/Electric";
-      } else {
-        systemType = "Straight A/C";
+      switch (applicationCode.toUpperCase()) {
+        case "H":
+          systemType = "Heat Pump";
+          break;
+        case "G":
+          systemType = "Gas/Electric";
+          break;
+        case "C":
+          systemType = "Straight A/C";
+          break;
+        default:
+          systemType = "Straight A/C";
       }
       
-      // Legacy DX/DZ pattern system type determination
-      if (["DZ", "DX"].includes(seriesPrefix.toUpperCase())) {
-        systemType = seriesPrefix.toUpperCase() === "DZ" ? "Heat Pump" : "Straight A/C";
-      }
+      // Map voltage code (position 7) to actual voltage/phase combinations per spec sheets
+      const voltagePhaseMap: Record<string, { voltage: string; phases: string }> = {
+        "1": { voltage: "208-230", phases: "1" },  // 208-230/1/60
+        "3": { voltage: "208-230", phases: "3" },  // 208-230/3/60  
+        "4": { voltage: "460", phases: "3" },      // 460/3/60
+        "7": { voltage: "575", phases: "3" }       // 575/3/60
+      };
       
-      // Determine specifications based on series and efficiency tier
-      const isHighEfficiency = seriesPrefix.charAt(1) === 'H';
-      const refrigerant = isR32Series ? "R-32" : "R-410A";
-      const seerRating = isR32Series ? (isHighEfficiency ? "16.7" : "14.0") : "20.0";
-      const soundLevel = isR32Series ? "70" : "62";
+      const { voltage, phases } = voltagePhaseMap[voltageCode] || { voltage: "208-230", phases: "1" };
+      
+      // Determine efficiency tier and specifications
+      const isHighEfficiency = efficiencyCode.toUpperCase() === "H";
+      const seriesPrefix = `D${efficiencyCode.toUpperCase()}${applicationCode.toUpperCase()}`;
+      
+      // Enhanced specifications based on official spec sheets
+      const seerRating = isHighEfficiency ? "16.7" : "14.0";
+      const eerRating = isHighEfficiency ? "12.5" : "12.0";
+      const ieerRating = isHighEfficiency ? "18.6" : "16.7";
+      
+      // Fan drive type description
+      const fanDriveMap: Record<string, string> = {
+        "D": "Direct Drive - Standard Static",
+        "L": "Direct Drive - Medium Static", 
+        "W": "Direct Drive - High Static"
+      };
+      const fanDriveType = fanDriveMap[fanDriveCode.toUpperCase()] || "Direct Drive";
       
       return {
         manufacturer: "Daikin",
-        confidence: 95,
+        confidence: 98,
         systemType: systemType as any,
         btuCapacity,
         voltage,
         phases,
         specifications: [
           { label: "SEER2 Rating", value: seerRating },
-          { label: "Refrigerant", value: refrigerant },
-          { label: "Sound Level", value: soundLevel, unit: "dB" },
-          { label: "Drive Type", value: "Variable Speed" },
-          { label: "Series", value: seriesPrefix.toUpperCase() },
-          { label: "Application", value: "Package Unit" }
+          { label: "EER2 Rating", value: eerRating },
+          { label: "IEER Rating", value: ieerRating },
+          { label: "Refrigerant", value: "R-32" },
+          { label: "Sound Level", value: "70", unit: "dB" },
+          { label: "Drive Type", value: fanDriveType },
+          { label: "Efficiency Tier", value: isHighEfficiency ? "High Efficiency" : "Standard Efficiency" },
+          { label: "Series", value: seriesPrefix },
+          { label: "Application", value: "R-32 Package Unit" }
         ]
       };
     }
