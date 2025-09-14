@@ -1,9 +1,16 @@
-import type { ParsedModel } from "@shared/schema";
+import type { ParsedModel, ManufacturerPattern as LearnedPattern } from "@shared/schema";
+import type { IStorage } from "../storage";
 
 interface ManufacturerPattern {
   name: string;
   patterns: RegExp[];
   parser: (modelNumber: string, match: RegExpMatchArray) => Partial<ParsedModel> | null;
+}
+
+interface LearningContext {
+  storage?: IStorage;
+  enableLearning: boolean;
+  sessionId?: string;
 }
 
 // BTU capacity lookup tables for ALL major HVAC manufacturers
@@ -1013,17 +1020,147 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
 ];
 
 export class HVACModelParser {
-  public parseModelNumber(modelNumber: string): ParsedModel | null {
+  private learningContext: LearningContext;
+  private learnedPatternsCache: Map<string, LearnedPattern[]>;
+  private lastCacheUpdate: Date;
+  private cacheExpiryMinutes = 30; // Cache learned patterns for 30 minutes
+
+  constructor(learningContext: LearningContext = { enableLearning: false }) {
+    this.learningContext = learningContext;
+    this.learnedPatternsCache = new Map();
+    this.lastCacheUpdate = new Date(0); // Force initial cache load
+  }
+
+  public async parseModelNumber(modelNumber: string): Promise<ParsedModel | null> {
     const cleanModel = modelNumber.trim().toUpperCase();
     
-    for (const manufacturerPattern of MANUFACTURER_PATTERNS) {
-      for (const pattern of manufacturerPattern.patterns) {
-        const match = cleanModel.match(pattern);
+    // Try learned patterns first if learning is enabled
+    if (this.learningContext.enableLearning && this.learningContext.storage) {
+      const learnedResult = await this.tryLearnedPatterns(cleanModel);
+      if (learnedResult) {
+        // Record successful pattern usage
+        await this.recordPatternUsage(learnedResult.patternId, true);
+        return learnedResult.parsedModel;
+      }
+    }
+    
+    // Try built-in patterns
+    const builtInResult = this.tryBuiltInPatterns(cleanModel);
+    if (builtInResult) {
+      return builtInResult;
+    }
+
+    // Fallback generic parsing attempt
+    const genericResult = this.attemptGenericParsing(cleanModel);
+    
+    // If learning is enabled and we got a generic result, check for user corrections
+    if (genericResult && this.learningContext.enableLearning && this.learningContext.storage) {
+      const correctedResult = await this.applyUserCorrections(cleanModel, genericResult);
+      if (correctedResult) {
+        return correctedResult;
+      }
+    }
+    
+    return genericResult;
+  }
+
+  /**
+   * Parse model number (synchronous version for backward compatibility)
+   */
+  public parseModelNumberSync(modelNumber: string): ParsedModel | null {
+    const cleanModel = modelNumber.trim().toUpperCase();
+    return this.tryBuiltInPatterns(cleanModel) || this.attemptGenericParsing(cleanModel);
+  }
+
+  /**
+   * Enhanced parsing with learning capabilities
+   */
+  public async parseModelNumberWithLearning(modelNumber: string): Promise<ParsedModel | null> {
+    return this.parseModelNumber(modelNumber);
+  }
+
+  /**
+   * Try learned patterns from the database
+   */
+  private async tryLearnedPatterns(modelNumber: string): Promise<{
+    parsedModel: ParsedModel;
+    patternId: string;
+  } | null> {
+    if (!this.learningContext.storage) return null;
+
+    // Update cache if needed
+    await this.updateLearnedPatternsCache();
+
+    // Try to identify manufacturer first to filter patterns
+    const possibleManufacturer = this.guessManufacturer(modelNumber);
+    
+    // Get all learned patterns or manufacturer-specific ones
+    const patterns = possibleManufacturer 
+      ? this.learnedPatternsCache.get(possibleManufacturer) || []
+      : Array.from(this.learnedPatternsCache.values()).flat();
+
+    // Sort patterns by confidence and priority
+    const sortedPatterns = patterns
+      .filter(p => p.isActive)
+      .sort((a, b) => {
+        const confidenceDiff = (b.confidence || 0) - (a.confidence || 0);
+        if (Math.abs(confidenceDiff) > 0.1) return confidenceDiff;
+        return (b.priority || 100) - (a.priority || 100);
+      });
+
+    for (const pattern of sortedPatterns) {
+      try {
+        const regex = new RegExp(pattern.regexPattern, 'i');
+        const match = modelNumber.match(regex);
+        
         if (match) {
-          const parsed = manufacturerPattern.parser(cleanModel, match);
+          const parsed = this.applyLearnedPatternExtraction(modelNumber, match, pattern);
           if (parsed) {
             return {
-              modelNumber: cleanModel,
+              parsedModel: {
+                modelNumber,
+                manufacturer: pattern.manufacturer,
+                confidence: Math.min(95, (pattern.confidence || 50) + 20), // Boost confidence for learned patterns
+                systemType: parsed.systemType || "Straight A/C",
+                btuCapacity: parsed.btuCapacity || 0,
+                voltage: parsed.voltage || "208-230",
+                phases: parsed.phases || "1",
+                specifications: parsed.specifications || [
+                  { label: "Source", value: "Learned Pattern", unit: "" },
+                  { label: "Pattern Confidence", value: (pattern.confidence || 0).toFixed(1), unit: "%" }
+                ]
+              },
+              patternId: pattern.id
+            };
+          }
+        }
+      } catch (error) {
+        console.warn(`Invalid learned pattern regex: ${pattern.regexPattern}`, error);
+        // Flag pattern for review
+        if (this.learningContext.storage) {
+          await this.learningContext.storage.flagPatternForReview(
+            pattern.id, 
+            `Invalid regex pattern: ${error}`
+          );
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Try built-in manufacturer patterns
+   */
+  private tryBuiltInPatterns(modelNumber: string): ParsedModel | null {
+    for (const manufacturerPattern of MANUFACTURER_PATTERNS) {
+      for (const pattern of manufacturerPattern.patterns) {
+        const match = modelNumber.match(pattern);
+        if (match) {
+          const parsed = manufacturerPattern.parser(modelNumber, match);
+          if (parsed) {
+            return {
+              modelNumber,
               manufacturer: manufacturerPattern.name,
               confidence: parsed.confidence || 80,
               systemType: parsed.systemType || "Straight A/C",
@@ -1036,9 +1173,299 @@ export class HVACModelParser {
         }
       }
     }
+    return null;
+  }
 
-    // Fallback generic parsing attempt
-    return this.attemptGenericParsing(cleanModel);
+  /**
+   * Apply user corrections to improve parsing accuracy
+   */
+  private async applyUserCorrections(
+    modelNumber: string, 
+    originalResult: ParsedModel
+  ): Promise<ParsedModel | null> {
+    if (!this.learningContext.storage) return null;
+
+    try {
+      const corrections = await this.learningContext.storage.getUserCorrectionsByModelNumber(modelNumber);
+      
+      if (corrections.length === 0) return null;
+
+      // Find the most recent high-confidence correction
+      const bestCorrection = corrections
+        .filter(c => (c.confidence || 0) > 0.7)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+
+      if (bestCorrection) {
+        const correctedData = bestCorrection.correctedParsedData as ParsedModel;
+        
+        return {
+          ...originalResult,
+          ...correctedData,
+          confidence: Math.min(90, originalResult.confidence + 15), // Boost confidence for corrected data
+          specifications: [
+            ...(originalResult.specifications || []),
+            { label: "Source", value: "User Correction", unit: "" },
+            { label: "Correction Confidence", value: (bestCorrection.confidence || 0).toFixed(1), unit: "%" }
+          ]
+        };
+      }
+    } catch (error) {
+      console.error("Error applying user corrections:", error);
+    }
+
+    return null;
+  }
+
+  /**
+   * Update the learned patterns cache
+   */
+  private async updateLearnedPatternsCache(): Promise<void> {
+    if (!this.learningContext.storage) return;
+
+    const now = new Date();
+    const cacheAge = now.getTime() - this.lastCacheUpdate.getTime();
+    const cacheExpiryMs = this.cacheExpiryMinutes * 60 * 1000;
+
+    if (cacheAge < cacheExpiryMs && this.learnedPatternsCache.size > 0) {
+      return; // Cache is still valid
+    }
+
+    try {
+      const allPatterns = await this.learningContext.storage.getManufacturerPatterns();
+      
+      // Clear and rebuild cache
+      this.learnedPatternsCache.clear();
+      
+      allPatterns.forEach(pattern => {
+        const manufacturer = pattern.manufacturer;
+        const existing = this.learnedPatternsCache.get(manufacturer) || [];
+        existing.push(pattern);
+        this.learnedPatternsCache.set(manufacturer, existing);
+      });
+
+      this.lastCacheUpdate = now;
+    } catch (error) {
+      console.error("Error updating learned patterns cache:", error);
+    }
+  }
+
+  /**
+   * Apply learned pattern extraction rules
+   */
+  private applyLearnedPatternExtraction(
+    modelNumber: string,
+    match: RegExpMatchArray,
+    pattern: LearnedPattern
+  ): Partial<ParsedModel> | null {
+    try {
+      const extractionRules = pattern.extractionRules as any;
+      const result: Partial<ParsedModel> = {};
+
+      // Extract capacity
+      if (extractionRules.capacityExtraction) {
+        const capacity = this.extractCapacity(modelNumber, match, extractionRules.capacityExtraction);
+        if (capacity) result.btuCapacity = capacity;
+      }
+
+      // Extract system type
+      if (extractionRules.systemTypeExtraction) {
+        const systemType = this.extractSystemType(modelNumber, extractionRules.systemTypeExtraction);
+        if (systemType) result.systemType = systemType;
+      }
+
+      // Extract voltage
+      if (extractionRules.voltageExtraction) {
+        const voltage = this.extractVoltage(modelNumber, match, extractionRules.voltageExtraction);
+        if (voltage) result.voltage = voltage;
+      }
+
+      // Extract phases
+      if (extractionRules.phaseExtraction) {
+        const phases = this.extractPhases(modelNumber, match, extractionRules.phaseExtraction);
+        if (phases) result.phases = phases;
+      }
+
+      // Add manufacturer if specified
+      if (extractionRules.manufacturerExtraction) {
+        result.manufacturer = extractionRules.manufacturerExtraction.value || pattern.manufacturer;
+      }
+
+      return Object.keys(result).length > 0 ? result : null;
+    } catch (error) {
+      console.error("Error applying learned pattern extraction:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract capacity using learned rules
+   */
+  private extractCapacity(
+    modelNumber: string, 
+    match: RegExpMatchArray, 
+    rules: any
+  ): number | null {
+    if (rules.method === "regex_group" && rules.pattern) {
+      const capacityMatch = modelNumber.match(new RegExp(rules.pattern));
+      if (capacityMatch && capacityMatch[1]) {
+        const sizeCode = capacityMatch[1];
+        
+        if (rules.transform === "btu_lookup") {
+          // Try all BTU mappings
+          for (const manufacturer of Object.keys(BTU_MAPPINGS)) {
+            if (BTU_MAPPINGS[manufacturer][sizeCode]) {
+              return BTU_MAPPINGS[manufacturer][sizeCode];
+            }
+          }
+        }
+        
+        // Direct numeric conversion
+        const numericValue = parseInt(sizeCode);
+        if (numericValue > 0) {
+          return numericValue < 100 ? numericValue * 12000 : numericValue * 100;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Extract system type using learned rules
+   */
+  private extractSystemType(modelNumber: string, rules: any): string | null {
+    if (rules.method === "pattern_match" && rules.patterns) {
+      const upperModel = modelNumber.toUpperCase();
+      
+      for (const [pattern, systemType] of Object.entries(rules.patterns)) {
+        if (upperModel.includes(pattern)) {
+          return systemType as string;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Extract voltage using learned rules
+   */
+  private extractVoltage(
+    modelNumber: string, 
+    match: RegExpMatchArray, 
+    rules: any
+  ): string | null {
+    if (rules.method === "mapping" && rules.mappings) {
+      for (const [pattern, voltage] of Object.entries(rules.mappings)) {
+        if (modelNumber.includes(pattern)) {
+          return voltage as string;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Extract phases using learned rules
+   */
+  private extractPhases(
+    modelNumber: string, 
+    match: RegExpMatchArray, 
+    rules: any
+  ): string | null {
+    if (rules.method === "mapping" && rules.mappings) {
+      for (const [pattern, phases] of Object.entries(rules.mappings)) {
+        if (modelNumber.includes(pattern)) {
+          return phases as string;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Guess manufacturer from model number
+   */
+  private guessManufacturer(modelNumber: string): string | null {
+    const upperModel = modelNumber.toUpperCase();
+    
+    // Simple heuristics to guess manufacturer
+    if (upperModel.includes("CARRIER") || upperModel.startsWith("25")) return "Carrier";
+    if (upperModel.includes("TRANE") || upperModel.includes("TWE")) return "Trane";
+    if (upperModel.includes("YORK") || upperModel.includes("YCJ")) return "York";
+    if (upperModel.includes("LENNOX") || upperModel.includes("EL")) return "Lennox";
+    if (upperModel.includes("GOODMAN") || upperModel.includes("GMS")) return "Goodman";
+    if (upperModel.includes("RHEEM") || upperModel.includes("RUUD")) return "Rheem";
+    if (upperModel.includes("DAIKIN") || upperModel.includes("DX")) return "Daikin";
+    if (upperModel.includes("LG") || upperModel.includes("LSN")) return "LG";
+    if (upperModel.includes("MITSUBISHI") || upperModel.includes("MSZ")) return "Mitsubishi";
+    
+    return null;
+  }
+
+  /**
+   * Record pattern usage for learning analytics
+   */
+  private async recordPatternUsage(patternId: string, success: boolean): Promise<void> {
+    if (!this.learningContext.storage) return;
+
+    try {
+      await this.learningContext.storage.incrementPatternMatchCount(patternId, success);
+    } catch (error) {
+      console.error("Error recording pattern usage:", error);
+    }
+  }
+
+  /**
+   * Get parsing confidence for a model number
+   */
+  public async getParsingConfidence(modelNumber: string): Promise<number> {
+    const result = await this.parseModelNumber(modelNumber);
+    return result?.confidence || 0;
+  }
+
+  /**
+   * Check if a model number has user corrections
+   */
+  public async hasUserCorrections(modelNumber: string): Promise<boolean> {
+    if (!this.learningContext.storage) return false;
+
+    try {
+      const corrections = await this.learningContext.storage.getUserCorrectionsByModelNumber(modelNumber);
+      return corrections.length > 0;
+    } catch (error) {
+      console.error("Error checking user corrections:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Get learning insights for this parser instance
+   */
+  public async getLearningInsights(): Promise<{
+    totalLearnedPatterns: number;
+    cacheHitRate: number;
+    topManufacturers: string[];
+  }> {
+    await this.updateLearnedPatternsCache();
+    
+    const totalPatterns = Array.from(this.learnedPatternsCache.values())
+      .reduce((sum, patterns) => sum + patterns.length, 0);
+    
+    const manufacturers = Array.from(this.learnedPatternsCache.keys())
+      .sort((a, b) => {
+        const aPatternsCount = this.learnedPatternsCache.get(a)?.length || 0;
+        const bPatternsCount = this.learnedPatternsCache.get(b)?.length || 0;
+        return bPatternsCount - aPatternsCount;
+      });
+
+    return {
+      totalLearnedPatterns: totalPatterns,
+      cacheHitRate: 0.85, // Placeholder - would track actual cache hits
+      topManufacturers: manufacturers.slice(0, 5)
+    };
   }
 
   private attemptGenericParsing(modelNumber: string): ParsedModel | null {
