@@ -96,7 +96,7 @@ export default function HVACDecoder() {
             {/* Hero Section */}
             <div className="text-center space-y-4">
               <h1 className="text-4xl font-bold text-primary">Package Unit System Selector</h1>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">The Package Unit System Selector is a specialized AI-powered HVAC matching system designed for professionals who need to replace package HVAC units. It supports model number parsing from any manufacturer and provides precise Daikin R32 replacements. The tool ensures all matches conform to Daikin's family, series, and configuration rules, and supports real-time editing, comparison, export, and learning features</p>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto text-left">The Package Unit System Selector is a specialized AI-powered HVAC matching system designed for professionals who need to replace package HVAC units. It supports model number parsing from any manufacturer and provides precise Daikin R32 replacements. The tool ensures all matches conform to Daikin's family, series, and configuration rules, and supports real-time editing, comparison, export, and learning features.</p>
             </div>
 
             {/* Main Search Form */}
