@@ -1258,7 +1258,7 @@ export class DaikinMatcher {
             upsizeCount: 0,
             downsizeCount: 0,
             searchTonnage: searchInput.tonnage,
-            availableTonnages: sizingOptions.availableTonnages.map(t => t.toString())
+            availableTonnages: sizingOptions.availableTonnages.map(t => t.toString() as any)
           }
         };
       }
@@ -1307,16 +1307,13 @@ export class DaikinMatcher {
           upsizeCount: upsizing.length,
           downsizeCount: downsizing.length,
           searchTonnage: searchInput.tonnage,
-          availableTonnages: systemTypeTonnages,
-          recommendedDirectTonnage: sizingOptions.direct.toString(),
-          availableDirectTonnage: sizingOptions.direct.toString(),
-          upSizeTonnage: sizingOptions.up?.toString() || null,
-          downSizeTonnage: sizingOptions.down?.toString() || null
+          availableTonnages: systemTypeTonnages as any
         }
       };
     } catch (error) {
       console.error("Error in searchBySpecInputAdvanced:", error);
-      const sizingOptions = this.getDaikinSizingOptions(searchTonnage);
+      const searchTonnageValue = parseFloat(searchInput.tonnage);
+      const sizingOptions = this.getDaikinSizingOptions(searchTonnageValue);
       
       return {
         directSizing: [],
@@ -1340,7 +1337,7 @@ export class DaikinMatcher {
           upsizeCount: 0,
           downsizeCount: 0,
           searchTonnage: searchInput.tonnage,
-          availableTonnages: sizingOptions.availableTonnages.map(t => t.toString())
+          availableTonnages: sizingOptions.availableTonnages.map(t => t.toString() as any)
         }
       };
     }

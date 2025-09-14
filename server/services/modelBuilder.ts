@@ -20,7 +20,7 @@ export class ModelBuilder {
               gas_btu_numeric, electric_kw, heat_exchanger, accessories } = request;
 
       // Validate family exists (with fallback for DSH variants)
-      const familyKey = family.startsWith('DSH') ? 'DSH' : family;
+      const familyKey = String(family).startsWith('DSH') ? 'DSH' : family;
       if (!DAIKIN_R32_FAMILIES[familyKey as keyof typeof DAIKIN_R32_FAMILIES]) {
         return {
           success: false,
@@ -96,7 +96,7 @@ export class ModelBuilder {
       // Build model positions
       const positions: ModelPositions = {
         p1: "D", // Always Daikin
-        p2: family.startsWith("DH") ? "H" : "S", // High or Standard efficiency
+        p2: String(family).startsWith("DH") ? "H" : "S", // High or Standard efficiency
         p3: this.getApplicationCode(systemType),
         p4_p6: capacityMatch.direct_match.code,
         p7: voltage,
@@ -258,8 +258,9 @@ export class ModelBuilder {
   }
 
   private getSystemTypeFromFamily(family: DaikinFamilyKeys): "Heat Pump" | "Gas/Electric" | "Straight A/C" {
-    if (family.includes("DSH") || family.includes("DHH")) return "Heat Pump";
-    if (family.includes("DSG") || family.includes("DHG")) return "Gas/Electric";
+    const familyStr = String(family);
+    if (familyStr.includes("DSH") || familyStr.includes("DHH")) return "Heat Pump";
+    if (familyStr.includes("DSG") || familyStr.includes("DHG")) return "Gas/Electric";
     return "Straight A/C";
   }
 
@@ -277,7 +278,7 @@ export class ModelBuilder {
   }
 
   private buildSpecifications(family: DaikinFamilyKeys, tons: number, voltage: string, systemType: string) {
-    const familyKey = family.startsWith('DSH') ? 'DSH' : family;
+    const familyKey = String(family).startsWith('DSH') ? 'DSH' : family;
     const familyConfig = DAIKIN_R32_FAMILIES[familyKey as keyof typeof DAIKIN_R32_FAMILIES];
     const btuCapacity = tons * 12000; // Convert tons to BTU/hr
     
@@ -285,7 +286,7 @@ export class ModelBuilder {
     const voltageDesc = POSITION_MAPPINGS.p7[voltage] || voltage;
     
     // Determine efficiency based on family
-    const efficiency = family.startsWith("DH") ? "High" : "Standard";
+    const efficiency = String(family).startsWith("DH") ? "High" : "Standard";
     
     return {
       id: `${family}_${tons}t_${voltage}`,
@@ -299,8 +300,8 @@ export class ModelBuilder {
       seerRating: efficiency === "High" ? 16.0 : 14.0,
       eerRating: 12.0,
       hspfRating: systemType === "Heat Pump" ? 8.5 : undefined,
-      refrigerant: "R-32",
-      driveType: "Direct Drive",
+      refrigerant: "R-32" as "R-410A" | "R-32" | "R-454B",
+      driveType: "Variable Speed" as "Fixed Speed" | "Variable Speed" | "Two-Stage",
       coolingStages: 1,
       heatingStages: systemType === "Heat Pump" ? 1 : undefined,
       soundLevel: Math.min(70 + (tons * 2), 80), // Estimate based on tonnage
@@ -326,7 +327,7 @@ export class ModelBuilder {
       electricalAddOns: [],
       fieldAccessories: [],
       serviceOptions: [],
-      warranty: "5 Year Limited Warranty",
+      warranty: 5,
       iaqFeatures: []
     };
   }
