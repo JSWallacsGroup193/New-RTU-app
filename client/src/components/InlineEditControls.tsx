@@ -141,7 +141,7 @@ export default function InlineEditControls({
             <div>
               <span className="text-muted-foreground">Phases:</span>
               <div className="font-medium">
-                {searchParams.phases} Phase
+                {searchParams.voltage.includes('/1/') ? '1' : '3'} Phase
               </div>
             </div>
             <div>
@@ -280,12 +280,17 @@ export default function InlineEditControls({
               </Select>
             </div>
 
-            {/* Phases */}
+            {/* Phases - derived from voltage selection */}
             <div className="space-y-2">
               <Label htmlFor="phases">Phases</Label>
               <Select 
-                value={editParams.phases} 
-                onValueChange={(value) => updateParam('phases', value)}
+                value={editParams.voltage.includes('/1/') ? '1' : '3'} 
+                onValueChange={(value) => {
+                  // Update voltage to match selected phases
+                  const currentVoltage = editParams.voltage.split('/')[0];
+                  const newVoltage = `${currentVoltage}/${value}/60`;
+                  updateParam('voltage', newVoltage);
+                }}
               >
                 <SelectTrigger data-testid="select-phases">
                   <SelectValue />

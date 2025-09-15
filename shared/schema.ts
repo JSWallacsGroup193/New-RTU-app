@@ -1742,6 +1742,8 @@ export interface EnhancedUnit {
   coolingStages?: number;
   heatingStages?: number;
   soundLevel: number;
+  heatingBTU?: number; // For Gas/Electric systems
+  gasCategory?: "Natural Gas" | "Propane"; // For Gas/Electric systems
   dimensions: { length: number; width: number; height: number } | string;
   weight: number;
   operatingAmperage: number;
