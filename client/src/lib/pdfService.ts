@@ -39,6 +39,7 @@ interface DaikinReplacement {
     unit?: string;
   }>;
   sizeMatch: "smaller" | "direct" | "larger";
+  compatibilityScore?: number; // 0-100 compatibility percentage
   seerRating?: number;
   eerRating?: number;
   hspfRating?: number;
@@ -81,6 +82,7 @@ interface ExportOptions {
   includeNomenclatureBreakdown?: boolean;
   includeSearchCriteria?: boolean;
   includeNotesSection?: boolean;
+  includeCompatibilityScores?: boolean; // New option for compatibility analysis
   technician?: string;
   customer?: string;
   project?: string;
@@ -344,7 +346,7 @@ export class PDFService {
   }
 
   // Generate enhanced replacement recommendations table with sizing emphasis
-  private generateReplacementTable(replacements: DaikinReplacement[], original?: OriginalUnit): void {
+  private generateReplacementTable(replacements: DaikinReplacement[], original?: OriginalUnit, options: ExportOptions = {}): void {
     this.checkNewPage(100);
 
     // Section header
@@ -382,20 +384,38 @@ export class PDFService {
         this.doc.text(section.title, this.marginLeft, this.currentY);
         this.currentY += 10;
 
-        // Prepare table data
-        const tableData = section.units.map(unit => [
-          unit.modelNumber,
-          this.formatBTU(unit.btuCapacity),
-          `${unit.seerRating || 'N/A'}`,
-          `${unit.soundLevel || 'N/A'} dB`,
-          unit.refrigerant || 'R-32',
-          unit.driveType || 'Variable',
-          this.getSizeMatchIndicator(unit.sizeMatch)
-        ]);
+        // Check if compatibility scores should be included
+        const includeCompatibility = options.includeCompatibilityScores !== false && section.units.some(u => u.compatibilityScore);
+        
+        // Create header with conditional compatibility column
+        const headers = ['Model Number', 'Capacity', 'SEER', 'Sound', 'Refrigerant', 'Drive'];
+        if (includeCompatibility) {
+          headers.push('Compatibility');
+        }
+        headers.push('Match Type');
+
+        // Prepare table data with optional compatibility scores
+        const tableData = section.units.map(unit => {
+          const baseRow = [
+            unit.modelNumber,
+            this.formatBTU(unit.btuCapacity),
+            `${unit.seerRating || 'N/A'}`,
+            `${unit.soundLevel || 'N/A'} dB`,
+            unit.refrigerant || 'R-32',
+            unit.driveType || 'Variable'
+          ];
+          
+          if (includeCompatibility) {
+            baseRow.push(unit.compatibilityScore ? `${unit.compatibilityScore}%` : 'N/A');
+          }
+          
+          baseRow.push(this.getSizeMatchIndicator(unit.sizeMatch));
+          return baseRow;
+        });
 
         this.generateTable({
           startY: this.currentY,
-          head: [['Model Number', 'Capacity', 'SEER', 'Sound', 'Refrigerant', 'Drive', 'Match Type']],
+          head: [headers],
           body: tableData,
           theme: 'striped',
           headStyles: {
@@ -408,15 +428,25 @@ export class PDFService {
             fontSize: 8,
             cellPadding: 2
           },
-          columnStyles: {
-            0: { fontStyle: 'bold', cellWidth: 30 },
-            1: { cellWidth: 25 },
-            2: { cellWidth: 20 },
-            3: { cellWidth: 20 },
-            4: { cellWidth: 25 },
-            5: { cellWidth: 25 },
-            6: { cellWidth: 25, textColor: [section.color[0], section.color[1], section.color[2]], fontStyle: 'bold' }
-          },
+          columnStyles: (() => {
+            const styles: any = {
+              0: { fontStyle: 'bold', cellWidth: includeCompatibility ? 24 : 30 },
+              1: { cellWidth: includeCompatibility ? 18 : 22 },
+              2: { cellWidth: includeCompatibility ? 14 : 18 },
+              3: { cellWidth: includeCompatibility ? 14 : 18 },
+              4: { cellWidth: includeCompatibility ? 18 : 22 },
+              5: { cellWidth: includeCompatibility ? 18 : 22 }
+            };
+            
+            if (includeCompatibility) {
+              styles[6] = { cellWidth: 20, textColor: [0, 114, 198], fontStyle: 'bold' };
+              styles[7] = { cellWidth: 18, textColor: [section.color[0], section.color[1], section.color[2]], fontStyle: 'bold' };
+            } else {
+              styles[6] = { cellWidth: 25, textColor: [section.color[0], section.color[1], section.color[2]], fontStyle: 'bold' };
+            }
+            
+            return styles;
+          })(),
           margin: { left: this.marginLeft, right: this.marginRight }
         });
 
@@ -546,6 +576,182 @@ export class PDFService {
     });
 
     this.currentY += 15;
+  }
+
+  // Add professional compatibility score breakdown
+  private addCompatibilityScoreBreakdown(unit: DaikinReplacement, original: OriginalUnit, searchCriteria: SearchCriteria): void {
+    if (!unit.compatibilityScore) return;
+    
+    this.checkNewPage(80);
+    
+    // Section header
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(14);
+    this.doc.setTextColor(0, 114, 198);
+    this.doc.text(`Compatibility Analysis - ${unit.modelNumber}`, this.marginLeft, this.currentY);
+    this.currentY += 8;
+    
+    // Overall score display
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(12);
+    this.doc.setTextColor(0, 0, 0);
+    this.doc.text(`Overall Compatibility Score: ${unit.compatibilityScore}%`, this.marginLeft, this.currentY);
+    
+    // Add color-coded score indicator
+    const scoreColor = this.getCompatibilityScoreColor(unit.compatibilityScore);
+    this.doc.setFillColor(scoreColor[0], scoreColor[1], scoreColor[2]);
+    this.doc.rect(this.marginLeft + 70, this.currentY - 5, 20, 8, 'F');
+    this.doc.setTextColor(255, 255, 255);
+    this.doc.setFontSize(10);
+    this.doc.text(`${unit.compatibilityScore}%`, this.marginLeft + 75, this.currentY);
+    
+    this.currentY += 15;
+    
+    // Calculate detailed breakdown scores
+    const breakdown = this.calculateCompatibilityBreakdown(unit, original, searchCriteria);
+    
+    // Compatibility breakdown table
+    const breakdownData = [
+      ['Compatibility Factor', 'Weight', 'Original', 'Replacement', 'Score', 'Points Earned'],
+      ['System Type Match', '25%', original.systemType, unit.systemType, breakdown.systemType.match ? '✓' : '✗', `${breakdown.systemType.points}/25`],
+      ['Capacity Match', '30%', this.formatBTU(original.btuCapacity), this.formatBTU(unit.btuCapacity), this.getSizeMatchIndicator(unit.sizeMatch), `${breakdown.capacity.points}/30`],
+      ['Voltage Match', '20%', original.voltage, unit.voltage, breakdown.voltage.match ? '✓' : '✗', `${breakdown.voltage.points}/20`],
+      ['Phase Match', '10%', original.phases, unit.phases, breakdown.phases.match ? '✓' : '✗', `${breakdown.phases.points}/10`],
+      ['Efficiency Level', '15%', this.getEfficiencyFromSeer(breakdown.efficiency.originalSeer), this.getEfficiencyFromSeer(breakdown.efficiency.replacementSeer), this.getEfficiencyComparison(breakdown.efficiency.originalSeer, breakdown.efficiency.replacementSeer), `${breakdown.efficiency.points}/15`]
+    ];
+    
+    this.generateTable({
+      startY: this.currentY,
+      head: [breakdownData[0]],
+      body: breakdownData.slice(1),
+      theme: 'grid',
+      headStyles: {
+        fillColor: [0, 114, 198],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: 2
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 35 },
+        1: { cellWidth: 15, textColor: [100, 100, 100] },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 25, fontStyle: 'bold' },
+        5: { cellWidth: 25, textColor: [0, 114, 198], fontStyle: 'bold' }
+      },
+      alternateRowStyles: {
+        fillColor: [248, 249, 250]
+      },
+      margin: { left: this.marginLeft, right: this.marginRight }
+    });
+    
+    this.currentY += 15;
+    
+    // Add recommendations based on score
+    this.doc.setFont('helvetica', 'bold');
+    this.doc.setFontSize(11);
+    this.doc.setTextColor(0, 0, 0);
+    this.doc.text('Recommendation:', this.marginLeft, this.currentY);
+    
+    this.doc.setFont('helvetica', 'normal');
+    this.doc.setFontSize(10);
+    const recommendation = this.getCompatibilityRecommendation(unit.compatibilityScore);
+    const recommendationLines = this.doc.splitTextToSize(recommendation, this.contentWidth - 10);
+    
+    recommendationLines.forEach((line: string, index: number) => {
+      this.doc.text(line, this.marginLeft + 5, this.currentY + 5 + (index * 5));
+    });
+    
+    this.currentY += 5 + (recommendationLines.length * 5) + 15;
+  }
+
+  // Helper method to get compatibility score color
+  private getCompatibilityScoreColor(score: number): [number, number, number] {
+    if (score >= 90) return [34, 139, 34]; // Green
+    if (score >= 80) return [0, 114, 198]; // Blue
+    if (score >= 70) return [255, 193, 7]; // Yellow
+    if (score >= 60) return [255, 140, 0]; // Orange
+    return [220, 53, 69]; // Red
+  }
+
+  // Helper method to calculate detailed compatibility breakdown
+  private calculateCompatibilityBreakdown(unit: DaikinReplacement, original: OriginalUnit, searchCriteria: SearchCriteria) {
+    const originalSeer = this.getSpecValue(original.specifications, 'SEER2 Rating') || 
+                        this.getSpecValue(original.specifications, 'SEER') || 16;
+    const replacementSeer = unit.seerRating || 16;
+    
+    return {
+      systemType: {
+        match: original.systemType === unit.systemType,
+        points: original.systemType === unit.systemType ? 25 : 
+                ((original.systemType === "Heat Pump" && unit.systemType === "Gas/Electric") || 
+                 (original.systemType === "Gas/Electric" && unit.systemType === "Heat Pump")) ? 15 : 0
+      },
+      capacity: {
+        tonnageDiff: Math.abs((original.btuCapacity / 12000) - (unit.btuCapacity / 12000)),
+        points: this.getCapacityPoints(Math.abs((original.btuCapacity / 12000) - (unit.btuCapacity / 12000)))
+      },
+      voltage: {
+        match: original.voltage === unit.voltage,
+        points: original.voltage === unit.voltage ? 20 : 0
+      },
+      phases: {
+        match: original.phases === unit.phases,
+        points: original.phases === unit.phases ? 10 : (original.voltage === unit.voltage ? 5 : 0)
+      },
+      efficiency: {
+        originalSeer: parseFloat(originalSeer.toString()),
+        replacementSeer: replacementSeer,
+        points: this.getEfficiencyPoints(searchCriteria.efficiency || 'standard', replacementSeer)
+      }
+    };
+  }
+
+  // Helper method to get capacity points
+  private getCapacityPoints(tonnageDiff: number): number {
+    if (tonnageDiff === 0) return 30;
+    if (tonnageDiff <= 0.5) return 25;
+    if (tonnageDiff <= 1.0) return 20;
+    if (tonnageDiff <= 1.5) return 10;
+    return 0;
+  }
+
+  // Helper method to get efficiency points
+  private getEfficiencyPoints(requestedEfficiency: string, seer: number): number {
+    if (requestedEfficiency === "high" && seer >= 16) return 15;
+    if (requestedEfficiency === "standard" && seer >= 14 && seer < 18) return 15;
+    return Math.max(0, 15 - Math.abs((seer - 16) * 2));
+  }
+
+  // Helper method to get efficiency from SEER
+  private getEfficiencyFromSeer(seer: number): string {
+    if (seer >= 18) return "High Efficiency";
+    if (seer >= 16) return "High Efficiency";
+    if (seer >= 14) return "Standard Efficiency";
+    return "Standard";
+  }
+
+  // Helper method to get efficiency comparison
+  private getEfficiencyComparison(originalSeer: number, replacementSeer: number): string {
+    const diff = replacementSeer - originalSeer;
+    if (diff > 2) return "Much Better";
+    if (diff > 0) return "Better";
+    if (diff === 0) return "Same";
+    if (diff > -2) return "Slightly Lower";
+    return "Lower";
+  }
+
+  // Helper method to get compatibility recommendation
+  private getCompatibilityRecommendation(score: number): string {
+    if (score >= 95) return "Excellent match! This replacement unit meets or exceeds all original specifications and is highly recommended for professional installation.";
+    if (score >= 85) return "Very good match. This replacement unit aligns well with original requirements with minor variations that should not affect performance.";
+    if (score >= 75) return "Good match. This unit provides suitable replacement with acceptable variations. Recommend reviewing specific differences with customer.";
+    if (score >= 65) return "Acceptable match. Some specifications differ from original. Professional assessment recommended to ensure suitability for application.";
+    return "Limited match. Significant differences from original specifications. Careful evaluation required before recommending this replacement.";
   }
 
   // Add detailed specifications section
@@ -746,7 +952,7 @@ export class PDFService {
     this.addProjectInfo(options);
 
     // Add replacement recommendations table with Direct/Up/Down sizing
-    this.generateReplacementTable(replacements);
+    this.generateReplacementTable(replacements, undefined, options);
 
     // Add detailed specifications for each unit
     replacements.forEach((replacement, index) => {
@@ -756,6 +962,22 @@ export class PDFService {
       }
       
       this.addDetailedSpecifications(replacement);
+      
+      // Add compatibility score breakdown if explicitly enabled and search criteria available
+      if (options.includeCompatibilityScores === true && replacement.compatibilityScore && options.searchCriteria) {
+        // Create a mock original unit from search criteria for comparison
+        const originalForComparison: OriginalUnit = {
+          modelNumber: 'Original Unit',
+          manufacturer: 'Various',
+          systemType: options.searchCriteria.systemType as "Heat Pump" | "Gas/Electric" | "Straight A/C",
+          btuCapacity: parseFloat(options.searchCriteria.tonnage) * 12000,
+          voltage: options.searchCriteria.voltage,
+          phases: options.searchCriteria.phases || '1',
+          specifications: []
+        };
+        
+        this.addCompatibilityScoreBreakdown(replacement, originalForComparison, options.searchCriteria);
+      }
       
       // Add nomenclature breakdown
       if (options.includeNomenclatureBreakdown !== false) {
@@ -814,6 +1036,11 @@ export class PDFService {
 
     // Add detailed specifications
     this.addDetailedSpecifications(replacement);
+
+    // Add compatibility score breakdown if explicitly enabled
+    if (options.includeCompatibilityScores === true && replacement.compatibilityScore && options.searchCriteria) {
+      this.addCompatibilityScoreBreakdown(replacement, original, options.searchCriteria);
+    }
 
     // Add nomenclature breakdown
     if (options.includeNomenclatureBreakdown !== false) {

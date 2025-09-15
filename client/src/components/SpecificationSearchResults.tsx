@@ -807,6 +807,7 @@ export default function SpecificationSearchResults({
         includeProjectInfo: true,
         includeSearchCriteria: true,
         includeNomenclatureBreakdown: true,
+        includeCompatibilityScores: true, // Enable professional compatibility analysis
         includeEnvironmentalBenefits: true,
         includeNotesSection: true,
         searchCriteria: searchCriteria,
@@ -836,6 +837,21 @@ export default function SpecificationSearchResults({
     try {
       // Create "original unit" from search parameters for comparison
       const { voltage: parsedVoltage, phases: parsedPhases } = parseCombinedVoltage(searchParams.voltage);
+      
+      // Convert search parameters to search criteria format for PDF export
+      const searchCriteria = {
+        systemType: searchParams.systemType,
+        tonnage: searchParams.tonnage,
+        voltage: parsedVoltage,
+        phases: parsedPhases.toString(),
+        efficiency: searchParams.efficiency,
+        heatingBTU: searchParams.heatingBTU,
+        heatKitKW: searchParams.heatKitKW,
+        gasCategory: searchParams.gasCategory,
+        maxSoundLevel: searchParams.maxSoundLevel,
+        refrigerant: searchParams.refrigerant,
+        driveType: searchParams.driveType
+      };
       const originalUnit = {
         modelNumber: "Search Specifications",
         manufacturer: "Various",
@@ -880,7 +896,9 @@ export default function SpecificationSearchResults({
       await exportSingleComparison(originalUnit, replacement, {
         includeProjectInfo: true,
         includeEnvironmentalBenefits: true,
-        includeCostAnalysis: true
+        includeCompatibilityScores: true, // Enable professional compatibility analysis
+        includeCostAnalysis: true,
+        searchCriteria: searchCriteria
       });
 
       toast({
