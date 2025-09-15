@@ -163,6 +163,14 @@ export default function EnhancedUnitCard({
     }
   };
 
+  const getCompatibilityScoreColor = (score: number) => {
+    if (score >= 90) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+    if (score >= 80) return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+    if (score >= 70) return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+    if (score >= 60) return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+    return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+  };
+
   const normalizedUnit = normalizeUnit(unit);
   const efficiencyBadge = getEfficiencyBadge(normalizedUnit.modelNumber);
 
@@ -846,6 +854,15 @@ export default function EnhancedUnitCard({
                 <Badge className={systemTypeColors[unit.systemType]} variant="secondary">
                   {unit.systemType}
                 </Badge>
+                {unit.compatibilityScore !== undefined && (
+                  <Badge 
+                    className={getCompatibilityScoreColor(unit.compatibilityScore)} 
+                    variant="secondary"
+                    data-testid={`badge-compatibility-score-${unit.id}`}
+                  >
+                    {unit.compatibilityScore}% Match
+                  </Badge>
+                )}
               </div>
             </div>
           </div>

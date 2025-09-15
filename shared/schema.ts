@@ -1641,6 +1641,7 @@ export interface EnhancedUnit {
   voltage: string;
   phases: string;
   sizeMatch: "smaller" | "direct" | "larger";
+  compatibilityScore?: number; // 0-100 percentage score for Option 4
   
   // FLAT PROPERTIES FOR BACKWARD COMPATIBILITY
   seerRating: number;

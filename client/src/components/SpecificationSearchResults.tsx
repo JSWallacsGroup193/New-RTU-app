@@ -246,14 +246,12 @@ export default function SpecificationSearchResults({
     const unitSeer = extractSpecificationValue(unit.specifications, "SEER2 Rating") as number || 
                     extractSpecificationValue(unit.specifications, "SEER Rating") as number || 16.0;
     
-    if (originalSpecs.efficiency === "high" && unitSeer >= 18) {
+    if (originalSpecs.efficiency === "high" && unitSeer >= 16) {
       score += 15;
     } else if (originalSpecs.efficiency === "standard" && unitSeer >= 14 && unitSeer < 18) {
       score += 15;
-    } else if (originalSpecs.efficiency === "premium" && unitSeer >= 20) {
-      score += 15;
     } else {
-      score += Math.max(0, 15 - Math.abs((unitSeer - 16) * 2)); // Gradual scoring
+      score += Math.max(0, 15 - Math.abs((unitSeer - 16) * 2)); // Gradual scoring for other cases
     }
 
     // Heating Compatibility (10 points)
@@ -323,6 +321,9 @@ export default function SpecificationSearchResults({
         return option.code !== "DFT";
       }).slice(0, 2);
       
+      // Calculate compatibility score
+      const compatibilityScore = calculateCompatibilityScore(unit, searchParams);
+      
       return {
         id: unit.id,
         modelNumber: unit.modelNumber,
@@ -332,6 +333,7 @@ export default function SpecificationSearchResults({
         voltage: unit.voltage,
         phases: unit.phases,
         sizeMatch: (unit as any).sizeMatch as "smaller" | "direct" | "larger", // Use actual sizeMatch from API response
+        compatibilityScore, // Compatibility score for Option 4
         
         // FLAT PROPERTIES FOR BACKWARD COMPATIBILITY
         seerRating: authenticallyCalculatedSeer,
