@@ -1095,7 +1095,8 @@ export class DaikinMatcher {
       return "575";
     }
     
-    // Default fallback
+    // Log warning for unrecognized voltage instead of silent default
+    console.warn(`Warning: Unrecognized voltage '${voltage}', defaulting to 208-230`);
     return "208-230";
   }
 
@@ -1446,10 +1447,14 @@ export class DaikinMatcher {
       "7": "575"
     };
     
-    const baseVoltage = baseVoltageMap[voltageCode] || "208-230";
+    const baseVoltage = baseVoltageMap[voltageCode];
+    if (!baseVoltage) {
+      console.warn(`Warning: Unrecognized voltage code '${voltageCode}' in model ${model}, defaulting to 208-230`);
+    }
+    const finalVoltage = baseVoltage || "208-230";
     
     // Combine with user-selected phases to create full voltage string
-    const voltage = `${baseVoltage}/${phases}/60`;
+    const voltage = `${finalVoltage}/${phases}/60`;
     
     console.log(`        Voltage extraction: model="${model}", position 6="${voltageCode}", phases="${phases}", mapped to="${voltage}"`);
     return voltage;
