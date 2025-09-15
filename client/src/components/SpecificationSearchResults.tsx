@@ -230,6 +230,8 @@ export default function SpecificationSearchResults({
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isSavingToProject, setIsSavingToProject] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedUnitDetails, setSelectedUnitDetails] = useState<EnhancedUnit | null>(null);
   const { toast } = useToast();
 
   // Fetch user's projects for the dropdown
@@ -303,7 +305,7 @@ export default function SpecificationSearchResults({
         tonnage: tonnage.toString(),
         voltage: unit.voltage,
         phases: unit.phases,
-        sizeMatch: (unit as any).sizeMatch || "direct", // Use actual sizeMatch from API response
+        sizeMatch: (unit as any).sizeMatch as "smaller" | "direct" | "larger", // Use actual sizeMatch from API response
         
         // AUTHENTIC PERFORMANCE SPECIFICATIONS
         seerRating: authenticallyCalculatedSeer,
@@ -398,7 +400,9 @@ export default function SpecificationSearchResults({
           return b.soundLevel - a.soundLevel;
         case "size-match":
           const sizeOrder = { "direct": 0, "smaller": 1, "larger": 2 };
-          return sizeOrder[a.sizeMatch] - sizeOrder[b.sizeMatch];
+          const aOrder = sizeOrder[a.sizeMatch] ?? 999; // undefined sizeMatch goes to end
+          const bOrder = sizeOrder[b.sizeMatch] ?? 999;
+          return aOrder - bOrder;
         default:
           return 0;
       }
@@ -450,7 +454,8 @@ export default function SpecificationSearchResults({
   // Action handlers
   const handleViewDetails = (unit: EnhancedUnit) => {
     console.log("View details for:", unit.modelNumber);
-    // TODO: Implement modal or detailed view
+    setSelectedUnitDetails(unit);
+    setDetailsDialogOpen(true);
   };
 
   // Save units to project mutation
@@ -1165,7 +1170,7 @@ export default function SpecificationSearchResults({
                 tonnage: unit.tonnage,
                 voltage: unit.voltage,
                 phases: unit.phases,
-                sizeMatch: (unit as any).sizeMatch || "direct",
+                sizeMatch: (unit as any).sizeMatch as "smaller" | "direct" | "larger",
                 seerRating: unit.seerRating,
                 eerRating: unit.eerRating,
                 hspfRating: unit.hspfRating,
@@ -1262,6 +1267,104 @@ export default function SpecificationSearchResults({
           </Button>
         )}
       </div>
+
+      {/* Unit Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              {selectedUnitDetails?.modelNumber} - Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedUnitDetails && (
+            <div className="space-y-6 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">System Information</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Model Number:</span>
+                      <span className="font-medium">{selectedUnitDetails.modelNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">System Type:</span>
+                      <span className="font-medium">{selectedUnitDetails.systemType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">BTU Capacity:</span>
+                      <span className="font-medium">{selectedUnitDetails.btuCapacity.toLocaleString()} BTU/hr</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tonnage:</span>
+                      <span className="font-medium">{selectedUnitDetails.tonnage} Tons</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Voltage:</span>
+                      <span className="font-medium">{selectedUnitDetails.voltage}V</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Phases:</span>
+                      <span className="font-medium">{selectedUnitDetails.phases}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Performance Ratings</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">SEER Rating:</span>
+                      <span className="font-medium">{selectedUnitDetails.seerRating || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">EER Rating:</span>
+                      <span className="font-medium">{selectedUnitDetails.eerRating || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">HSPF Rating:</span>
+                      <span className="font-medium">{selectedUnitDetails.hspfRating || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Refrigerant:</span>
+                      <span className="font-medium">{selectedUnitDetails.refrigerant}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Drive Type:</span>
+                      <span className="font-medium">{selectedUnitDetails.driveType || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Sound Level:</span>
+                      <span className="font-medium">{selectedUnitDetails.soundLevel ? `${selectedUnitDetails.soundLevel} dB` : 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Physical Specifications</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <span className="text-sm text-muted-foreground">Dimensions</span>
+                    <div className="font-medium">{selectedUnitDetails.dimensions || 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-muted-foreground">Weight</span>
+                    <div className="font-medium">{selectedUnitDetails.weight ? `${selectedUnitDetails.weight} lbs` : 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-muted-foreground">Operating Amperage</span>
+                    <div className="font-medium">{selectedUnitDetails.operatingAmperage ? `${selectedUnitDetails.operatingAmperage} A` : 'N/A'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-muted-foreground">Max Fuse Size</span>
+                    <div className="font-medium">{selectedUnitDetails.maxFuseSize ? `${selectedUnitDetails.maxFuseSize} A` : 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Project Dialog */}
       <Dialog open={isCreateProjectOpen} onOpenChange={setIsCreateProjectOpen}>
