@@ -885,14 +885,21 @@ export class DaikinMatcher {
    */
   private normalizeVoltage(unitVoltage: string, criteriaVoltage: string): boolean {
     const normalize = (voltage: string): string => {
-      // Extract the main voltage numbers (e.g., "208-230" from "208-230/1/60")
-      const match = voltage.match(/(\d+)-?(\d+)/);
-      if (match) {
-        return `${match[1]}-${match[2]}`;
+      // Extract the main voltage numbers from full format (e.g., "208-230" from "208-230/1/60")
+      if (voltage.includes('-')) {
+        // Handle voltage ranges like "208-230"
+        const match = voltage.match(/(\d+)-(\d+)/);
+        if (match) {
+          return `${match[1]}-${match[2]}`;
+        }
+      } else {
+        // Handle single voltages like "460", "575"
+        const singleMatch = voltage.match(/(\d+)/);
+        if (singleMatch) {
+          return singleMatch[1];
+        }
       }
-      // Fallback for single voltage numbers
-      const singleMatch = voltage.match(/(\d+)/);
-      return singleMatch ? singleMatch[1] : voltage;
+      return voltage;
     };
     
     const normalizedUnit = normalize(unitVoltage);
