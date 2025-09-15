@@ -718,7 +718,7 @@ export default function SpecificationSearchResults({
         refrigerant: unit.refrigerant,
         driveType: unit.driveType,
         soundLevel: unit.soundLevel,
-        dimensions: unit.dimensions,
+        dimensions: normalizeDimensions(unit.dimensions),
         weight: unit.weight,
         specifications: [
           { label: "SEER", value: unit.seerRating.toString() },
@@ -796,7 +796,7 @@ export default function SpecificationSearchResults({
         refrigerant: unit.refrigerant,
         driveType: unit.driveType,
         soundLevel: unit.soundLevel,
-        dimensions: unit.dimensions,
+        dimensions: normalizeDimensions(unit.dimensions),
         weight: unit.weight,
         specifications: [
           { label: "SEER", value: unit.seerRating.toString() },
@@ -826,6 +826,29 @@ export default function SpecificationSearchResults({
     } finally {
       setIsExporting(false);
     }
+  };
+
+  // Helper function to normalize dimensions from EnhancedUnit format to DaikinReplacement format
+  const normalizeDimensions = (dimensions: { length: number; width: number; height: number } | string): { length: number; width: number; height: number } | undefined => {
+    if (typeof dimensions === "object" && dimensions !== null) {
+      // Already in correct format
+      return dimensions;
+    }
+    
+    if (typeof dimensions === "string") {
+      // Try to parse string format like "84x38x84" (LxWxH)
+      const match = dimensions.match(/(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)/);
+      if (match) {
+        return {
+          length: parseFloat(match[1]),
+          width: parseFloat(match[2]),
+          height: parseFloat(match[3])
+        };
+      }
+    }
+    
+    // Return undefined for invalid/unparseable dimensions
+    return undefined;
   };
 
   // Handle search parameter updates (if callback provided)
