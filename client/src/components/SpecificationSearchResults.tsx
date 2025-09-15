@@ -1211,6 +1211,7 @@ export default function SpecificationSearchResults({
                   onAddToProject={handleAddToProject}
                   onGenerateQuote={handleGenerateQuote}
                   family={getFamilyFromModelNumber(unit.modelNumber)}
+                  isEditable={true}
                 />
               ))}
             </div>
@@ -1345,7 +1346,13 @@ export default function SpecificationSearchResults({
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <span className="text-sm text-muted-foreground">Dimensions</span>
-                    <div className="font-medium">{selectedUnitDetails.dimensions || 'N/A'}</div>
+                    <div className="font-medium">
+                      {selectedUnitDetails.dimensions 
+                        ? (typeof selectedUnitDetails.dimensions === 'string' 
+                           ? selectedUnitDetails.dimensions
+                           : `${selectedUnitDetails.dimensions.length || 0}" L × ${selectedUnitDetails.dimensions.width || 0}" W × ${selectedUnitDetails.dimensions.height || 0}" H`)
+                        : 'N/A'}
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-muted-foreground">Weight</span>
