@@ -303,7 +303,7 @@ export default function SpecificationSearchResults({
         tonnage: tonnage.toString(),
         voltage: unit.voltage,
         phases: unit.phases,
-        sizeMatch: "direct" as const, // All spec search results are direct matches
+        sizeMatch: (unit as any).sizeMatch || "direct", // Use actual sizeMatch from API response
         
         // AUTHENTIC PERFORMANCE SPECIFICATIONS
         seerRating: authenticallyCalculatedSeer,
