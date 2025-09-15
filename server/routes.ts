@@ -134,6 +134,7 @@ export function registerRoutes(app: Express): Server {
           btuCapacity: unit.btuCapacity,
           voltage: unit.voltage,
           phases: unit.phases,
+          sizeMatch: (unit as any).sizeMatch, // Include the sizeMatch field for Direct/Up/Down sizing
           specifications: [
             { label: "SEER2 Rating", value: unit.seerRating?.toString() || "N/A" },
             { label: "Refrigerant", value: unit.refrigerant || "R-32" },

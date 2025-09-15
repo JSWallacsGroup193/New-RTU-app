@@ -480,6 +480,7 @@ export const specSearchResponseSchema = z.object({
     btuCapacity: z.number(),
     voltage: z.string(),
     phases: z.string(),
+    sizeMatch: z.enum(["smaller", "direct", "larger"]).optional(), // For Direct/Up/Down sizing
     specifications: z.array(z.object({
       label: z.string(),
       value: z.string(),
