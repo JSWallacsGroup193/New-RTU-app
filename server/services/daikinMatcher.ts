@@ -544,11 +544,14 @@ export class DaikinMatcher {
   }
 
   private getVoltageCode(voltage: string): string {
+    // Normalize voltage string by removing "V" suffix and trimming
+    const normalizedVoltage = voltage.replace(/V$/i, '').trim();
+    
     const voltageMap: Record<string, string> = {
       "208-230": "1", "208/230": "1", "230": "1",
       "460": "4", "575": "7"
     };
-    return voltageMap[voltage] || "1";
+    return voltageMap[normalizedVoltage] || "1";
   }
 
   private getHeatFieldCode(gasBtu?: number, electricKw?: number, family?: any): string {

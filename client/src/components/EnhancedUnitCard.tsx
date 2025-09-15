@@ -1157,7 +1157,7 @@ export default function EnhancedUnitCard({
                               )}
                             </div>
                             <Select 
-                              value={segment.selectedValue} 
+                              value={segment.selectedValue || segment.options[0]?.value || ""} 
                               onValueChange={(value) => handleSegmentChange(index, value)}
                               data-testid={`select-segment-${index}`}
                               disabled={modelBuilder.isBuilding}
