@@ -12,15 +12,52 @@ interface SpecificationSearchFormProps {
   onSearch: (params: SpecSearchInput) => void;
   onBack: () => void;
   isLoading: boolean;
+  extractedData?: any;
 }
 
-export default function SpecificationSearchForm({ onSearch, onBack, isLoading }: SpecificationSearchFormProps) {
+export default function SpecificationSearchForm({ onSearch, onBack, isLoading, extractedData }: SpecificationSearchFormProps) {
+  
+  // Helper function to convert extracted capacity to tonnage
+  const convertToTonnage = (capacity: string): string => {
+    if (!capacity) return "3.0";
+    
+    // Extract numeric value from capacity strings like "4 Ton", "48,000 BTU/hr", etc.
+    const tonMatch = capacity.match(/(\d+(?:\.\d+)?)[\s]*(?:ton|tons)/i);
+    if (tonMatch) {
+      return tonMatch[1];
+    }
+    
+    // Convert BTU to tons (12,000 BTU = 1 ton)
+    const btuMatch = capacity.match(/([\d,]+)[\s]*btu/i);
+    if (btuMatch) {
+      const btu = parseInt(btuMatch[1].replace(/,/g, ''));
+      const tons = (btu / 12000).toFixed(1);
+      return tons;
+    }
+    
+    return "3.0"; // Default fallback
+  };
+  
+  // Helper function to normalize voltage format
+  const normalizeVoltage = (voltage: string): string => {
+    if (!voltage) return "208-230/3/60";
+    
+    // Common voltage mappings
+    const voltageMap: Record<string, string> = {
+      "208-230V 3φ": "208-230/3/60",
+      "208-230V 1φ": "208-230/1/60",
+      "460V 3φ": "460/3/60",
+      "575V 3φ": "575/3/60",
+    };
+    
+    return voltageMap[voltage] || "208-230/3/60";
+  };
   const form = useForm<SpecSearchInput>({
     resolver: zodResolver(specSearchInputSchema),
     defaultValues: {
       systemType: "Heat Pump",
-      tonnage: "3.0",
-      voltage: "208-230/3/60",
+      tonnage: extractedData?.capacity ? convertToTonnage(extractedData.capacity) : "3.0",
+      voltage: extractedData?.voltage ? normalizeVoltage(extractedData.voltage) : "208-230/3/60",
       efficiency: "standard",
       heatingBTU: undefined,
       heatKitKW: undefined,
@@ -52,6 +89,19 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading }:
           <p className="text-muted-foreground">
             Find Daikin units that match your specific requirements. Complete the required fields in order and any applicable conditional fields based on your system type.
           </p>
+          {extractedData && (
+            <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200 mb-1">
+                <Settings className="h-4 w-4" />
+                Data Pre-filled from Equipment Photo
+              </div>
+              <p className="text-xs text-green-700 dark:text-green-300">
+                {extractedData.manufacturer && extractedData.modelNumber 
+                  ? `${extractedData.manufacturer} ${extractedData.modelNumber}` 
+                  : 'Equipment specifications'} detected and pre-filled below. Please verify and adjust if needed.
+              </p>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <Form {...form}>

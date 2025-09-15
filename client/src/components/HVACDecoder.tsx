@@ -5,13 +5,14 @@ import SearchResults from "./SearchResults";
 import ErrorDisplay from "./ErrorDisplay";
 import SpecificationSearchForm from "./SpecificationSearchForm";
 import SpecificationSearchResults from "./SpecificationSearchResults";
+import { DataPlateUpload } from "./DataPlateUpload";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Database, Search, Zap } from "lucide-react";
+import { Database, Search, Camera } from "lucide-react";
 import { decodeModelNumber, searchBySpecs } from "@/lib/api";
 import { DecodeResponse, SpecSearchResponse, type SpecSearchInput } from "@shared/schema";
 
-type AppState = "search" | "results" | "error" | "spec-search" | "spec-results";
+type AppState = "search" | "results" | "error" | "spec-search" | "spec-results" | "data-plate";
 
 export default function HVACDecoder() {
   const [appState, setAppState] = useState<AppState>("search");
@@ -19,6 +20,7 @@ export default function HVACDecoder() {
   const [specSearchResults, setSpecSearchResults] = useState<SpecSearchResponse | null>(null);
   const [specSearchParams, setSpecSearchParams] = useState<SpecSearchInput | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [extractedData, setExtractedData] = useState<any>(null);
 
   const decodeMutation = useMutation({
     mutationFn: decodeModelNumber,
@@ -61,12 +63,23 @@ export default function HVACDecoder() {
     setSearchResults(null);
     setSpecSearchResults(null);
     setSpecSearchParams(null);
+    setExtractedData(null);
     setErrorMessage("");
     decodeMutation.reset();
     specSearchMutation.reset();
   };
 
   const handleSpecSearch = () => {
+    setAppState("spec-search");
+  };
+
+  const handleDataPlateUpload = () => {
+    setAppState("data-plate");
+  };
+
+  const handleDataExtracted = (data: any) => {
+    setExtractedData(data);
+    // Auto-navigate to spec search with pre-filled data
     setAppState("spec-search");
   };
 
@@ -124,15 +137,20 @@ export default function HVACDecoder() {
                 </CardContent>
               </Card>
 
-              <Card className="border-dashed">
+              <Card className="hover-elevate cursor-pointer" onClick={handleDataPlateUpload}>
                 <CardContent className="p-6 text-center space-y-3">
-                  <Zap className="h-8 w-8 text-muted-foreground mx-auto" />
-                  <h3 className="text-lg font-semibold text-muted-foreground">Coming Soon</h3>
+                  <Camera className="h-8 w-8 text-primary mx-auto" />
+                  <h3 className="text-lg font-semibold">Upload Data Plate</h3>
                   <p className="text-sm text-muted-foreground">
-                    Batch processing for multiple model numbers
+                    Take a photo of equipment nameplate for automatic extraction
                   </p>
-                  <Button variant="ghost" className="w-full" disabled>
-                    Bulk Decoder
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    data-testid="button-data-plate"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Data Plate
                   </Button>
                 </CardContent>
               </Card>
@@ -197,12 +215,38 @@ export default function HVACDecoder() {
             </div>
           </div>
         </div>
+      ) : appState === "data-plate" ? (
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-6 text-center">
+              <h1 className="text-3xl font-bold text-primary mb-2">Equipment Data Plate Upload</h1>
+              <p className="text-muted-foreground">
+                Upload a photo of the equipment nameplate to automatically extract specifications
+              </p>
+            </div>
+            <DataPlateUpload
+              onDataExtracted={handleDataExtracted}
+              maxFiles={1}
+              className="max-w-2xl mx-auto"
+            />
+            <div className="flex justify-center mt-6">
+              <Button 
+                variant="outline" 
+                onClick={handleNewSearch}
+                data-testid="button-back-home"
+              >
+                Back to Main Menu
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : appState === "spec-search" ? (
         <div className="container mx-auto px-4 py-8">
           <SpecificationSearchForm
             onSearch={handleSpecSearchSubmit}
             onBack={handleNewSearch}
             isLoading={specSearchMutation.isPending}
+            extractedData={extractedData}
           />
         </div>
       ) : appState === "results" && searchResults ? (

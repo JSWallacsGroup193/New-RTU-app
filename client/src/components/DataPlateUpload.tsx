@@ -71,33 +71,43 @@ export function DataPlateUpload({
     };
 
     try {
-      // Simulate upload progress
-      for (let progress = 0; progress <= 100; progress += 20) {
-        uploadedFile.progress = progress;
-        setUploadedFiles(prev => prev.map(f => f.file === file ? uploadedFile : f));
-        await new Promise(resolve => setTimeout(resolve, 200));
+      // Update progress during upload
+      uploadedFile.progress = 25;
+      setUploadedFiles(prev => prev.map(f => f.file === file ? uploadedFile : f));
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('dataPlate', file);
+
+      // Upload and process with real OCR service
+      const response = await fetch('/api/data-plate/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      uploadedFile.progress = 75;
+      setUploadedFiles(prev => prev.map(f => f.file === file ? uploadedFile : f));
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process data plate');
       }
 
       uploadedFile.status = 'processing';
+      uploadedFile.progress = 90;
       setUploadedFiles(prev => prev.map(f => f.file === file ? uploadedFile : f));
 
-      // Simulate data extraction (in real implementation, this would call OCR service)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Mock extracted data for demonstration
+      // Extract specifications from OCR result
+      const specs = result.extractedData?.specifications || {};
+      
       uploadedFile.extractedData = {
-        modelNumber: 'DSC048D3A',
-        manufacturer: 'Trane',
-        capacity: '4 Ton',
-        voltage: '208-230V 3φ',
-        serialNumber: 'M24X12345',
-        specifications: {
-          'Cooling Capacity': '48,000 BTU/hr',
-          'Heating Capacity': '45,000 BTU/hr',
-          'Efficiency Rating': '14.2 SEER',
-          'Refrigerant': 'R-410A',
-          'Compressor Type': 'Scroll'
-        }
+        modelNumber: result.extractedData?.modelNumber,
+        manufacturer: result.extractedData?.manufacturer,
+        capacity: result.extractedData?.capacity,
+        voltage: result.extractedData?.voltage,
+        serialNumber: result.extractedData?.serialNumber,
+        specifications: specs
       };
 
       uploadedFile.status = 'completed';
@@ -110,16 +120,18 @@ export function DataPlateUpload({
 
       toast({
         title: "Data Plate Processed",
-        description: `Successfully extracted equipment data from ${file.name}`,
+        description: result.extractedData?.modelNumber 
+          ? `Successfully extracted model: ${result.extractedData.modelNumber}`
+          : "Equipment data extracted - review specifications below",
       });
 
     } catch (error) {
       uploadedFile.status = 'error';
-      uploadedFile.error = 'Failed to process image. Please try again.';
+      uploadedFile.error = error instanceof Error ? error.message : 'Failed to process image. Please try again.';
       
       toast({
         title: "Processing Failed",
-        description: `Could not extract data from ${file.name}`,
+        description: error instanceof Error ? error.message : `Could not extract data from ${file.name}`,
         variant: "destructive",
       });
     }
