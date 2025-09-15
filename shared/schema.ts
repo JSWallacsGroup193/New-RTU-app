@@ -76,8 +76,8 @@ export function combinedVoltageFromSeparate(voltage: VoltageEnum, phases: PhaseE
 // CONDITIONAL SEARCH INPUT SCHEMA
 // ============================================================================
 
-// Specification Search Input with ordered fields
-export const specSearchInputSchema = z.object({
+// Base specification search input schema for extending
+const baseSpecSearchInputSchema = z.object({
   // Required fields in order: System Type → Tonnage → Combined Voltage (includes phases)
   systemType: systemTypeEnum,
   tonnage: tonnageEnum,
@@ -97,7 +97,10 @@ export const specSearchInputSchema = z.object({
   // Optional filters
   refrigerant: refrigerantEnum.optional(),
   driveType: driveTypeEnum.optional()
-}).superRefine((data, ctx) => {
+});
+
+// Specification Search Input with conditional validation
+export const specSearchInputSchema = baseSpecSearchInputSchema.superRefine((data, ctx) => {
   // Conditional validation for Gas/Electric systems
   if (data.systemType === "Gas/Electric") {
     if (!data.heatingBTU) {
@@ -1142,6 +1145,56 @@ export const positionBasedSpecSearchResponseSchema = z.object({
 });
 
 export type PositionBasedSpecSearchResponse = z.infer<typeof positionBasedSpecSearchResponseSchema>;
+
+// ============================================================================
+// DATA PLATE UPLOAD SCHEMAS
+// ============================================================================
+
+// Data plate upload request schema
+export const dataPlateUploadRequestSchema = z.object({
+  fileName: z.string(),
+  fileSize: z.number(),
+  fileType: z.string(),
+  imageData: z.string().optional(), // Base64 encoded image data
+});
+
+export type DataPlateUploadRequest = z.infer<typeof dataPlateUploadRequestSchema>;
+
+// Extracted data from data plate
+export const extractedDataPlateDataSchema = z.object({
+  modelNumber: z.string().optional(),
+  manufacturer: z.string().optional(),
+  capacity: z.string().optional(),
+  voltage: z.string().optional(),
+  serialNumber: z.string().optional(),
+  specifications: z.record(z.string()).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  extractionMethod: z.enum(["OCR", "Manual", "AI"]).optional(),
+});
+
+export type ExtractedDataPlateData = z.infer<typeof extractedDataPlateDataSchema>;
+
+// Data plate processing response schema
+export const dataPlateProcessingResponseSchema = z.object({
+  success: z.boolean(),
+  fileName: z.string(),
+  extractedData: extractedDataPlateDataSchema.nullable(),
+  processingTimeMs: z.number(),
+  errors: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  suggestions: z.array(z.string()).default([]),
+});
+
+export type DataPlateProcessingResponse = z.infer<typeof dataPlateProcessingResponseSchema>;
+
+// Enhanced search request that can include data plate data
+export const dataPlateSearchRequestSchema = baseSpecSearchInputSchema.extend({
+  extractedData: extractedDataPlateDataSchema.optional(),
+  searchMode: z.enum(["extracted_only", "user_override", "hybrid"]).default("hybrid"),
+  confidenceThreshold: z.number().min(0).max(1).default(0.7),
+});
+
+export type DataPlateSearchRequest = z.infer<typeof dataPlateSearchRequestSchema>;
 
 // ============================================================================
 // DATABASE TABLE DEFINITIONS FOR PROJECT MANAGEMENT
