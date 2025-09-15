@@ -157,7 +157,7 @@ type SortOption =
   | "sound-desc"
   | "size-match";
 
-type ViewMode = "grid" | "list";
+type ViewMode = "grid" | "list" | "comparison";
 
 export default function SpecificationSearchResults({
   searchResults,
@@ -199,6 +199,75 @@ export default function SpecificationSearchResults({
       return res.json();
     })
   });
+
+  // Calculate compatibility score between original specs and replacement unit
+  const calculateCompatibilityScore = (unit: any, originalSpecs: SpecSearchInput): number => {
+    let score = 0;
+    let maxPoints = 0;
+
+    // System Type Match (25 points)
+    maxPoints += 25;
+    if (unit.systemType === originalSpecs.systemType) {
+      score += 25;
+    } else if (
+      (unit.systemType === "Heat Pump" && originalSpecs.systemType === "Gas/Electric") ||
+      (unit.systemType === "Gas/Electric" && originalSpecs.systemType === "Heat Pump")
+    ) {
+      score += 15; // Partial match for compatible systems
+    }
+
+    // Capacity Match (30 points)
+    maxPoints += 30;
+    const originalTonnage = parseFloat(originalSpecs.tonnage);
+    const unitTonnage = parseFloat((unit.btuCapacity / 12000).toFixed(1));
+    const tonnageDiff = Math.abs(originalTonnage - unitTonnage);
+    
+    if (tonnageDiff === 0) {
+      score += 30; // Perfect match
+    } else if (tonnageDiff <= 0.5) {
+      score += 25; // Close match
+    } else if (tonnageDiff <= 1.0) {
+      score += 20; // Acceptable range
+    } else if (tonnageDiff <= 1.5) {
+      score += 10; // Marginal
+    }
+
+    // Voltage Match (20 points)
+    maxPoints += 20;
+    const originalVoltage = parseCombinedVoltage(originalSpecs.voltage);
+    if (unit.voltage === originalVoltage.voltage && unit.phases === originalVoltage.phases) {
+      score += 20;
+    } else if (unit.voltage === originalVoltage.voltage) {
+      score += 10; // Voltage matches but not phases
+    }
+
+    // Efficiency Match (15 points)
+    maxPoints += 15;
+    const unitSeer = extractSpecificationValue(unit.specifications, "SEER2 Rating") as number || 
+                    extractSpecificationValue(unit.specifications, "SEER Rating") as number || 16.0;
+    
+    if (originalSpecs.efficiency === "high" && unitSeer >= 18) {
+      score += 15;
+    } else if (originalSpecs.efficiency === "standard" && unitSeer >= 14 && unitSeer < 18) {
+      score += 15;
+    } else if (originalSpecs.efficiency === "premium" && unitSeer >= 20) {
+      score += 15;
+    } else {
+      score += Math.max(0, 15 - Math.abs((unitSeer - 16) * 2)); // Gradual scoring
+    }
+
+    // Heating Compatibility (10 points)
+    maxPoints += 10;
+    if (originalSpecs.heatingBTU && unit.systemType !== "Straight A/C") {
+      score += 10;
+    } else if (!originalSpecs.heatingBTU && unit.systemType === "Straight A/C") {
+      score += 10;
+    } else if (!originalSpecs.heatingBTU) {
+      score += 5; // Neutral if no heating specified
+    }
+
+    return Math.round((score / maxPoints) * 100);
+  };
 
   // Transform search results to enhanced units using AUTHENTIC Daikin specifications
   const enhancedUnits: EnhancedUnit[] = useMemo(() => {
@@ -985,6 +1054,14 @@ export default function SpecificationSearchResults({
             >
               <List className="h-4 w-4" />
             </Button>
+            <Button
+              variant={viewMode === "comparison" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("comparison")}
+              data-testid="button-view-comparison"
+            >
+              <GitCompare className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
@@ -1231,7 +1308,7 @@ export default function SpecificationSearchResults({
       {/* Results Display - Sizing Comparison or Grid/List */}
       <div className="space-y-4">
         {filteredAndSortedUnits.length > 0 ? (
-          hasSizingComparison ? (
+          hasSizingComparison || viewMode === "comparison" ? (
             <SizingComparisonLayout
               units={filteredAndSortedUnits.map(unit => ({
                 id: unit.id,
