@@ -5,6 +5,7 @@ import { HVACModelParser } from "./services/hvacParser";
 import { DaikinMatcher } from "./services/daikinMatcher";
 import { LearningService } from "./services/learningService";
 import { LearningAnalytics } from "./services/learningAnalytics";
+import { DataPlateParser } from "./services/dataPlateParser";
 import { 
   decodeResponseSchema, 
   specSearchResponseSchema, 
@@ -16,10 +17,13 @@ import {
   SpecSearchInputLegacy,
   buildModelRequestSchema,
   BuildModelRequest,
-  BuildModelResponse
+  BuildModelResponse,
+  dataPlateProcessingResponseSchema,
+  dataPlateUploadRequestSchema
 } from "@shared/schema";
 import { ALL_MODEL_SPECIFICATIONS } from "./data/daikinCatalog";
 import { ModelBuilder } from "./services/modelBuilder";
+import multer from 'multer';
 import { z } from "zod";
 import { 
   handleValidationError,
@@ -33,6 +37,23 @@ const matcher = new DaikinMatcher();
 const learningService = new LearningService(storage);
 const learningAnalytics = new LearningAnalytics(storage);
 const modelBuilder = new ModelBuilder();
+const dataPlateParser = new DataPlateParser();
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: DataPlateParser.getMaxFileSize(), // 10MB limit
+    files: 5 // Maximum 5 files per request
+  },
+  fileFilter: (req, file, cb) => {
+    if (DataPlateParser.getSupportedFileTypes().includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`), false);
+    }
+  }
+});
 
 // Request validation schemas
 const decodeRequestSchema = z.object({
@@ -752,6 +773,108 @@ export function registerRoutes(app: Express): Server {
         return handleValidationError(res, error);
       }
       return handleInternalError(res, "Failed to export learning data", error);
+    }
+  });
+
+  // ============================================================================
+  // DATA PLATE UPLOAD AND PROCESSING ENDPOINTS
+  // ============================================================================
+
+  // Single file upload endpoint
+  app.post("/api/data-plate/upload", upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          fileName: '',
+          extractedData: null,
+          processingTimeMs: 0,
+          errors: ['No image file provided. Please select an image to upload.'],
+          warnings: [],
+          suggestions: ['Choose a clear photo of the equipment data plate.']
+        });
+      }
+
+      const result = await dataPlateParser.processImageFile(
+        req.file.originalname,
+        req.file.buffer,
+        req.file.mimetype
+      );
+
+      // Validate response with schema
+      const validatedResult = dataPlateProcessingResponseSchema.parse(result);
+      
+      res.json(validatedResult);
+    } catch (error) {
+      console.error("Error in data plate upload:", error);
+      
+      if (error instanceof multer.MulterError) {
+        let errorMessage = 'File upload failed.';
+        let suggestions = ['Please try again with a different image.'];
+        
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          errorMessage = 'File size too large. Maximum size is 10MB.';
+          suggestions = ['Compress the image or take a closer photo of the data plate.'];
+        } else if (error.code === 'LIMIT_FILE_COUNT') {
+          errorMessage = 'Too many files. Maximum 5 files allowed.';
+          suggestions = ['Upload files in smaller batches.'];
+        }
+
+        return res.status(400).json({
+          success: false,
+          fileName: req.file?.originalname || '',
+          extractedData: null,
+          processingTimeMs: 0,
+          errors: [errorMessage],
+          warnings: [],
+          suggestions
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        fileName: req.file?.originalname || '',
+        extractedData: null,
+        processingTimeMs: 0,
+        errors: ['Internal server error during image processing.'],
+        warnings: [],
+        suggestions: [
+          'Please try again later.',
+          'If the problem persists, try a different image format.',
+          'Ensure the data plate is clearly visible in the photo.'
+        ]
+      });
+    }
+  });
+
+  // Get supported file types and limits endpoint
+  app.get("/api/data-plate/info", (req, res) => {
+    try {
+      res.json({
+        supportedFileTypes: DataPlateParser.getSupportedFileTypes(),
+        maxFileSize: DataPlateParser.getMaxFileSize(),
+        maxFileSizeMB: Math.round(DataPlateParser.getMaxFileSize() / (1024 * 1024)),
+        maxFiles: 5,
+        features: [
+          'Drag and drop upload',
+          'Real-time progress tracking',
+          'HVAC specification extraction',
+          'Mobile camera support'
+        ],
+        extractionCapabilities: [
+          'Model numbers',
+          'Manufacturer detection',
+          'Capacity (BTU/Tonnage)',
+          'Voltage and phase',
+          'Efficiency ratings (SEER, EER, HSPF)',
+          'Refrigerant type',
+          'Compressor type',
+          'Serial numbers'
+        ]
+      });
+    } catch (error) {
+      console.error("Error in data plate info:", error);
+      return handleInternalError(res, "Failed to retrieve data plate upload information", error);
     }
   });
 
