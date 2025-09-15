@@ -56,8 +56,8 @@ export default function SpecificationSearchForm({ onSearch, onBack, isLoading, e
     resolver: zodResolver(specSearchInputSchema),
     defaultValues: {
       systemType: "Heat Pump",
-      tonnage: extractedData?.capacity ? convertToTonnage(extractedData.capacity) : "3.0",
-      voltage: extractedData?.voltage ? normalizeVoltage(extractedData.voltage) : "208-230/3/60",
+      tonnage: extractedData?.capacity ? convertToTonnage(extractedData.capacity) as any : "3.0",
+      voltage: extractedData?.voltage ? normalizeVoltage(extractedData.voltage) as any : "208-230/3/60",
       efficiency: "standard",
       heatingBTU: undefined,
       heatKitKW: undefined,

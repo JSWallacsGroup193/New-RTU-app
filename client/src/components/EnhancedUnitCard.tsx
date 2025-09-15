@@ -144,18 +144,22 @@ export default function EnhancedUnitCard({
     selectedValue: string;
     isValid?: boolean;
     validationMessage?: string;
-  }>>(() => {
-    // Initialize synchronously to prevent undefined values
+  }>>([]);
+
+  // Initialize nomenclature segments when unit data is available
+  useEffect(() => {
     if (family && unit.modelNumber) {
       try {
-        return getNomenclatureBreakdown(unit.modelNumber);
+        const segments = getNomenclatureBreakdown(unit.modelNumber);
+        setNomenclatureSegments(segments);
       } catch (error) {
         console.warn('Failed to initialize nomenclature segments:', error);
-        return [];
+        setNomenclatureSegments([]);
       }
+    } else {
+      setNomenclatureSegments([]);
     }
-    return [];
-  });
+  }, [family, unit.modelNumber]);
   const [dynamicModelNumber, setDynamicModelNumber] = useState(unit.modelNumber ?? "");
   const [modelBuildError, setModelBuildError] = useState<string | null>(null);
   const [modelBuildSuccess, setModelBuildSuccess] = useState<boolean>(false);
