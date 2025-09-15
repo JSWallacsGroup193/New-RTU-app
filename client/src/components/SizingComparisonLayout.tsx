@@ -1,57 +1,63 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import EnhancedUnitCard from "./EnhancedUnitCard";
 import { 
-  Thermometer, 
-  Zap, 
-  Volume2, 
-  Ruler, 
-  Weight, 
-  Plus,
   ArrowDown,
   ArrowUp,
   Target,
   CheckCircle2
 } from "lucide-react";
 import { useState } from "react";
+import { type EnhancedUnit, DaikinFamilyKeys } from "@shared/schema";
 
-// Enhanced unit interface for the comparison layout
-interface ComparisonUnit {
-  id: string;
-  modelNumber: string;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  tonnage: string;
-  voltage: string;
-  phases: string;
-  sizeMatch: "smaller" | "direct" | "larger";
-  seerRating: number;
-  eerRating?: number;
-  hspfRating?: number;
-  refrigerant: string;
-  driveType: string;
-  soundLevel: number;
-  dimensions: { length: number; width: number; height: number };
-  weight: number;
-  operatingAmperage: number;
-  maxFuseSize: number;
-}
+// Helper function to determine family from model number
+const getFamilyFromModelNumber = (modelNumber: string): DaikinFamilyKeys | undefined => {
+  if (!modelNumber || modelNumber.length < 3) return undefined;
+  
+  const prefix = modelNumber.substring(0, 3).toUpperCase();
+  
+  // Handle DSH variants based on capacity
+  if (prefix === "DSH") {
+    // Extract capacity to determine DSH variant
+    const capacityMatch = modelNumber.match(/\d{3}/);
+    if (capacityMatch) {
+      const capacity = parseInt(capacityMatch[0]);
+      // 036-072 = 3-6 tons, 090-120 = 7.5-10 tons
+      if (capacity >= 36 && capacity <= 72) {
+        return "DSH_3to6";
+      } else if (capacity >= 90 && capacity <= 120) {
+        return "DSH_7p5to10";
+      }
+    }
+    return "DSH_3to6"; // Default fallback
+  }
+  
+  // Standard family mapping
+  const familyMap: Record<string, DaikinFamilyKeys> = {
+    "DSC": "DSC",
+    "DHC": "DHC", 
+    "DSG": "DSG",
+    "DHG": "DHG",
+    "DHH": "DHH"
+  };
+  
+  return familyMap[prefix];
+};
 
 interface SizingComparisonLayoutProps {
-  units: ComparisonUnit[];
-  onUnitSelect?: (unit: ComparisonUnit) => void;
-  onAddToProject?: (unit: ComparisonUnit) => void;
-  onViewDetails?: (unit: ComparisonUnit) => void;
+  units: EnhancedUnit[];
+  onUnitSelect?: (unit: EnhancedUnit) => void;
+  onAddToProject?: (unit: EnhancedUnit) => void;
+  onViewDetails?: (unit: EnhancedUnit) => void;
+  onSpecificationUpdate?: (newModelNumber: string, specifications: any) => void;
 }
 
 export default function SizingComparisonLayout({
   units,
   onUnitSelect,
   onAddToProject,
-  onViewDetails
+  onViewDetails,
+  onSpecificationUpdate
 }: SizingComparisonLayoutProps) {
-  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
 
   // Sort units to ensure proper order: Downsize | Direct | Upsize
   const sortedUnits = units.sort((a, b) => {
@@ -94,13 +100,14 @@ export default function SizingComparisonLayout({
     }
   };
 
-  const formatTonnage = (btuCapacity: number) => {
-    const tonnage = btuCapacity / 12000;
-    return tonnage % 1 === 0 ? `${tonnage}.0` : tonnage.toFixed(1);
-  };
-
-  const handleUnitClick = (unit: ComparisonUnit) => {
-    setSelectedUnit(unit.id);
+  const handleUnitSelection = (unit: EnhancedUnit, isSelected: boolean) => {
+    const newSelectedUnits = new Set(selectedUnits);
+    if (isSelected) {
+      newSelectedUnits.add(unit.id);
+    } else {
+      newSelectedUnits.delete(unit.id);
+    }
+    setSelectedUnits(newSelectedUnits);
     onUnitSelect?.(unit);
   };
 
@@ -124,162 +131,30 @@ export default function SizingComparisonLayout({
         </p>
       </div>
 
-      {/* Three-Column Comparison Layout */}
+      {/* Three-Column Comparison Layout using EnhancedUnitCard */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {sortedUnits.map((unit) => {
           const config = getSizingConfig(unit.sizeMatch);
-          const isSelected = selectedUnit === unit.id;
+          const isSelected = selectedUnits.has(unit.id);
           const isDirect = unit.sizeMatch === "direct";
+          const family = getFamilyFromModelNumber(unit.modelNumber);
           
           return (
-            <Card 
+            <EnhancedUnitCard
               key={unit.id}
-              className={`relative transition-all duration-200 cursor-pointer hover-elevate ${
-                isSelected ? `ring-2 ${config.borderColor}` : ''
-              } ${isDirect ? 'lg:scale-105 lg:shadow-lg' : ''}`}
-              onClick={() => handleUnitClick(unit)}
+              unit={unit}
+              isSelected={isSelected}
+              onSelectionChange={(selected) => handleUnitSelection(unit, selected)}
+              onViewDetails={onViewDetails || (() => {})}
+              onAddToProject={onAddToProject}
+              variant="compact"
+              sizingConfig={config}
+              compactClassName={isDirect ? 'lg:scale-105 lg:shadow-lg' : ''}
+              isEditable={true}
+              family={family}
+              onSpecificationUpdate={onSpecificationUpdate}
               data-testid={`card-unit-${unit.sizeMatch}`}
-            >
-              {/* Sizing Badge Header */}
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`${config.color} text-white p-2 rounded-lg`}>
-                      {config.icon}
-                    </div>
-                    <div>
-                      <Badge className={config.badgeClass} data-testid={`badge-${unit.sizeMatch}`}>
-                        {config.title}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {config.subtitle}
-                      </p>
-                    </div>
-                  </div>
-                  {isDirect && (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" data-testid="icon-recommended" />
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                {/* Model Number */}
-                <div className="text-center">
-                  <h4 className="font-semibold text-sm font-mono text-foreground" data-testid={`text-model-${unit.sizeMatch}`}>
-                    {unit.modelNumber}
-                  </h4>
-                </div>
-
-                {/* Prominent Capacity Display */}
-                <div className="text-center bg-muted rounded-lg p-4">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Thermometer className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">CAPACITY</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-2xl font-bold text-foreground" data-testid={`text-capacity-${unit.sizeMatch}`}>
-                      {formatTonnage(unit.btuCapacity)} Tons
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {unit.btuCapacity.toLocaleString()} BTU/h
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Specifications */}
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">SEER:</span>
-                      <span className="font-medium" data-testid={`text-seer-${unit.sizeMatch}`}>
-                        {unit.seerRating}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">Sound:</span>
-                      <span className="font-medium" data-testid={`text-sound-${unit.sizeMatch}`}>
-                        {unit.soundLevel} dB
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Ruler className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">Voltage:</span>
-                      <span className="font-medium text-xs">
-                        {unit.voltage}V/{unit.phases}φ
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Weight className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">Weight:</span>
-                      <span className="font-medium">
-                        {unit.weight} lbs
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* System Type & Drive */}
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">System:</span>
-                    <span className="font-medium">{unit.systemType}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Drive:</span>
-                    <span className="font-medium">{unit.driveType}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Refrigerant:</span>
-                    <span className="font-medium">{unit.refrigerant}</span>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-2 pt-2">
-                  <Button 
-                    variant={isDirect ? "default" : "outline"}
-                    className="w-full text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onViewDetails?.(unit);
-                    }}
-                    data-testid={`button-details-${unit.sizeMatch}`}
-                  >
-                    View Details
-                  </Button>
-                  
-                  {onAddToProject && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="w-full text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAddToProject(unit);
-                      }}
-                      data-testid={`button-add-${unit.sizeMatch}`}
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Add to Project
-                    </Button>
-                  )}
-                </div>
-
-                {/* Sizing Explanation */}
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground italic">
-                    {config.description}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            />
           );
         })}
       </div>

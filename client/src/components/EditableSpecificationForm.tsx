@@ -85,7 +85,7 @@ export default function EditableSpecificationForm({
     return {
       family,
       systemType,
-      tonnage: mappedTonnage,
+      tonnage: "10.0" as Tonnage, // Default to available tonnage
       voltage: voltage as VoltageEnum,
       phases: phases as PhaseEnum,
       efficiency: efficiency as "standard" | "high",

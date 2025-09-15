@@ -38,7 +38,8 @@ import {
   ClipboardList,
   Map,
   Cog,
-  Info
+  Info,
+  CheckCircle2
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRealTimeModelBuilder } from "@/hooks/useModelBuilder";
@@ -95,6 +96,19 @@ interface EnhancedUnitCardProps {
   selectedFieldAccessories?: string[];
   onFactoryOptionsChange?: (selectedOptions: string[]) => void;
   onFieldAccessoriesChange?: (selectedAccessories: string[]) => void;
+  // Compact variant for comparison layout
+  variant?: "default" | "compact";
+  // Sizing comparison specific props
+  sizingConfig?: {
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    color: string;
+    borderColor: string;
+    badgeClass: string;
+    description: string;
+  };
+  compactClassName?: string;
 }
 
 export default function EnhancedUnitCard({
@@ -112,7 +126,10 @@ export default function EnhancedUnitCard({
   selectedFactoryOptions = [],
   selectedFieldAccessories = [],
   onFactoryOptionsChange,
-  onFieldAccessoriesChange
+  onFieldAccessoriesChange,
+  variant = "default",
+  sizingConfig,
+  compactClassName
 }: EnhancedUnitCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState("performance");
@@ -951,6 +968,261 @@ export default function EnhancedUnitCard({
         onSave={handleSave}
         onCancel={handleCancel}
       />
+    );
+  }
+
+  // Compact variant for comparison layout
+  if (variant === "compact" && sizingConfig) {
+    const isDirect = unit.sizeMatch === "direct";
+    const formatTonnage = (btuCapacity: number) => {
+      const tonnage = btuCapacity / 12000;
+      return tonnage % 1 === 0 ? `${tonnage}.0` : tonnage.toFixed(1);
+    };
+
+    return (
+      <Card 
+        className={`relative transition-all duration-200 cursor-pointer hover-elevate ${
+          isSelected ? `ring-2 ${sizingConfig.borderColor}` : ''
+        } ${isDirect ? 'lg:scale-105 lg:shadow-lg' : ''} ${compactClassName || ''}`}
+        onClick={() => onSelectionChange(!isSelected)}
+        data-testid={`card-unit-${unit.sizeMatch}`}
+      >
+        {/* Sizing Badge Header */}
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`${sizingConfig.color} text-white p-2 rounded-lg`}>
+                {sizingConfig.icon}
+              </div>
+              <div>
+                <Badge className={sizingConfig.badgeClass} data-testid={`badge-${unit.sizeMatch}`}>
+                  {sizingConfig.title}
+                </Badge>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {sizingConfig.subtitle}
+                </p>
+              </div>
+            </div>
+            {isDirect && (
+              <CheckCircle2 className="w-5 h-5 text-green-500" data-testid="icon-recommended" />
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          {/* Model Number */}
+          <div className="text-center">
+            <h4 className="font-semibold text-sm font-mono text-foreground" data-testid={`text-model-${unit.sizeMatch}`}>
+              {unit.modelNumber}
+            </h4>
+            {isEditable && family && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleEdit();
+                }}
+                data-testid="button-edit-enhanced-specifications"
+                className="mt-1 text-xs hover-elevate"
+              >
+                <Edit2 className="h-3 w-3 mr-1" />
+                Edit Model
+              </Button>
+            )}
+          </div>
+
+          {/* Prominent Capacity Display */}
+          <div className="text-center bg-muted rounded-lg p-4">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Thermometer className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">CAPACITY</span>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-bold text-foreground" data-testid={`text-capacity-${unit.sizeMatch}`}>
+                {formatTonnage(unit.btuCapacity)} Tons
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {unit.btuCapacity.toLocaleString()} BTU/h
+              </div>
+            </div>
+          </div>
+
+          {/* Key Specifications */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Zap className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">SEER:</span>
+                <span className="font-medium" data-testid={`text-seer-${unit.sizeMatch}`}>
+                  {normalizedUnit.seerRating}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Volume2 className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Sound:</span>
+                <span className="font-medium" data-testid={`text-sound-${unit.sizeMatch}`}>
+                  {unit.soundLevel} dB
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Ruler className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Voltage:</span>
+                <span className="font-medium text-xs">
+                  {unit.voltage}V/{unit.phases}φ
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Weight className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Weight:</span>
+                <span className="font-medium">
+                  {unit.weight} lbs
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* System Type & Drive */}
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">System:</span>
+              <span className="font-medium">{unit.systemType}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Drive:</span>
+              <span className="font-medium">{unit.driveType}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Refrigerant:</span>
+              <span className="font-medium">{unit.refrigerant}</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-2">
+            <Button 
+              variant={isDirect ? "default" : "outline"}
+              className="w-full text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(unit);
+              }}
+              data-testid={`button-details-${unit.sizeMatch}`}
+            >
+              View Details
+            </Button>
+            
+            {onAddToProject && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="w-full text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddToProject(unit);
+                }}
+                data-testid={`button-add-${unit.sizeMatch}`}
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Add to Project
+              </Button>
+            )}
+          </div>
+
+          {/* Sizing Explanation */}
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground italic">
+              {sizingConfig.description}
+            </p>
+          </div>
+
+          {/* Collapsible Nomenclature Section for Compact */}
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center justify-between w-full p-0 h-auto"
+                data-testid={`button-expand-specs-${unit.id}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="text-sm font-medium">Model Builder & Specs</span>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            
+            <CollapsibleContent className="space-y-4">
+              <Separator />
+              
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="nomenclature" data-testid="tab-nomenclature">Model Builder</TabsTrigger>
+                  <TabsTrigger value="performance" data-testid="tab-performance">Performance</TabsTrigger>
+                  <TabsTrigger value="technical" data-testid="tab-technical">Technical</TabsTrigger>
+                </TabsList>
+                
+                {/* Include the full tab content from the original component */}
+                <TabsContent value="nomenclature" className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                      <Code2 className="h-4 w-4" />
+                      Model Number Builder
+                    </h4>
+                    
+                    {/* Dynamic Model Number Display */}
+                    <div className={`p-4 rounded-lg mb-4 border transition-all duration-300 ${
+                      modelBuildSuccess 
+                        ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" 
+                        : modelBuildError 
+                          ? "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800" 
+                          : "bg-muted border-muted-foreground/20"
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-muted-foreground">Dynamic Model:</span>
+                        {modelBuilder.isBuilding && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="text-lg font-mono font-bold text-foreground mb-2">
+                        {dynamicModelNumber || "Building..."}
+                      </div>
+                      {modelBuildError && (
+                        <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
+                          <AlertCircle className="h-4 w-4" />
+                          <span>{modelBuildError}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Nomenclature segments grid - truncated for space */}
+                    {family && nomenclatureSegments.length > 0 && (
+                      <div className="grid grid-cols-1 gap-2">
+                        <p className="text-xs text-muted-foreground">24-Position Model Builder (First 6 positions shown)</p>
+                        {nomenclatureSegments.slice(0, 6).map((segment, index) => (
+                          <div key={`${segment.position}-${index}`} className="flex items-center gap-2 p-2 bg-muted rounded text-xs">
+                            <span className="font-mono w-8">{segment.position}</span>
+                            <span className="w-12 font-bold">{segment.code}</span>
+                            <span className="flex-1 truncate">{segment.description}</span>
+                          </div>
+                        ))}
+                        <p className="text-xs text-muted-foreground italic">Expand for full 24-position editor</p>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CollapsibleContent>
+          </Collapsible>
+        </CardContent>
+      </Card>
     );
   }
 

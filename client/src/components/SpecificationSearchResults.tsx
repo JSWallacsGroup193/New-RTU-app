@@ -1330,28 +1330,7 @@ export default function SpecificationSearchResults({
         {filteredAndSortedUnits.length > 0 ? (
           hasSizingComparison || viewMode === "comparison" ? (
             <SizingComparisonLayout
-              units={filteredAndSortedUnits.map(unit => ({
-                id: unit.id,
-                modelNumber: unit.modelNumber,
-                systemType: unit.systemType,
-                btuCapacity: unit.btuCapacity,
-                tonnage: unit.tonnage,
-                voltage: unit.voltage,
-                phases: unit.phases,
-                sizeMatch: unit.sizeMatch,
-                seerRating: unit.seerRating,
-                eerRating: unit.eerRating,
-                hspfRating: unit.hspfRating,
-                refrigerant: unit.refrigerant,
-                driveType: unit.driveType,
-                soundLevel: unit.soundLevel,
-                dimensions: typeof unit.dimensions === 'string' 
-                  ? { length: 0, width: 0, height: 0 } 
-                  : unit.dimensions,
-                weight: unit.weight,
-                operatingAmperage: unit.operatingAmperage,
-                maxFuseSize: unit.maxFuseSize
-              }))}
+              units={filteredAndSortedUnits}
               onUnitSelect={(unit) => {
                 setSelectedUnits(new Set([unit.id]));
                 handleViewDetails(filteredAndSortedUnits.find(u => u.id === unit.id)!);
