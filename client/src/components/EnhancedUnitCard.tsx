@@ -118,7 +118,7 @@ export default function EnhancedUnitCard({
   const [activeTab, setActiveTab] = useState("performance");
   const [isEditMode, setIsEditMode] = useState(false);
   
-  // Enhanced nomenclature builder state
+  // Enhanced nomenclature builder state with proper initialization
   const [nomenclatureSegments, setNomenclatureSegments] = useState<Array<{
     position: string;
     code: string;
@@ -127,8 +127,19 @@ export default function EnhancedUnitCard({
     selectedValue: string;
     isValid?: boolean;
     validationMessage?: string;
-  }>>([]);
-  const [dynamicModelNumber, setDynamicModelNumber] = useState(unit.modelNumber);
+  }>>(() => {
+    // Initialize synchronously to prevent undefined values
+    if (family && unit.modelNumber) {
+      try {
+        return getNomenclatureBreakdown(unit.modelNumber);
+      } catch (error) {
+        console.warn('Failed to initialize nomenclature segments:', error);
+        return [];
+      }
+    }
+    return [];
+  });
+  const [dynamicModelNumber, setDynamicModelNumber] = useState(unit.modelNumber ?? "");
   const [modelBuildError, setModelBuildError] = useState<string | null>(null);
   const [modelBuildSuccess, setModelBuildSuccess] = useState<boolean>(false);
   const [lastValidModel, setLastValidModel] = useState<string | null>(null);
@@ -210,13 +221,14 @@ export default function EnhancedUnitCard({
   };
 
   // Initialize nomenclature segments based on the current model number
+  // Guard against re-initialization while editing
   useEffect(() => {
-    if (unit.modelNumber && family) {
+    if (!isEditMode && unit.modelNumber && family) {
       const segments = getNomenclatureBreakdown(unit.modelNumber);
       setNomenclatureSegments(segments);
       setDynamicModelNumber(unit.modelNumber);
     }
-  }, [unit.modelNumber, family]);
+  }, [unit.modelNumber, family, isEditMode]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -629,14 +641,31 @@ export default function EnhancedUnitCard({
   };
 
   // Handle nomenclature segment changes with real-time model building
-  const handleSegmentChange = (segmentIndex: number, newValue: string) => {
-    const updatedSegments = [...nomenclatureSegments];
-    updatedSegments[segmentIndex].selectedValue = newValue;
-    updatedSegments[segmentIndex].code = newValue;
+  // New proper updateSegmentValue function that prevents state reset
+  const updateSegmentValue = (position: string, value: string) => {
+    setNomenclatureSegments(prev => prev.map(segment => 
+      segment.position === position 
+        ? { 
+            ...segment, 
+            selectedValue: value, 
+            code: value,
+            isValid: true, 
+            validationMessage: undefined 
+          }
+        : segment
+    ));
     
-    setNomenclatureSegments(updatedSegments);
+    // Build new model from updated segments
+    const updatedSegments = nomenclatureSegments.map(segment => 
+      segment.position === position 
+        ? { ...segment, selectedValue: value, code: value }
+        : segment
+    );
     
-    // Convert nomenclature segments to BuildModelRequest
+    const nextModel = buildModelFromSegments(updatedSegments);
+    setDynamicModelNumber(nextModel);
+    
+    // Convert to build request
     const buildRequest = convertSegmentsToBuildRequest(updatedSegments);
     
     if (buildRequest) {
@@ -647,7 +676,7 @@ export default function EnhancedUnitCard({
         cleanupRef.current();
       }
       
-      // Use the real-time model builder with enhanced feedback
+      // Use model builder but don't reset segments on error
       cleanupRef.current = modelBuilder.buildModel(buildRequest, (response) => {
         if (response && response.success && response.result) {
           const newModelNumber = response.result.model;
@@ -656,9 +685,12 @@ export default function EnhancedUnitCard({
           setModelBuildSuccess(true);
           setModelBuildError(null);
           
-          // Validate segments based on successful build
-          const validatedSegments = validateNomenclatureSegments(updatedSegments, response.result);
-          setNomenclatureSegments(validatedSegments);
+          // Validate segments but don't reset them
+          setNomenclatureSegments(prev => prev.map(segment => ({
+            ...segment,
+            isValid: true,
+            validationMessage: undefined
+          })));
           
           // Trigger specification update callback if provided
           if (onSpecificationUpdate) {
@@ -666,19 +698,31 @@ export default function EnhancedUnitCard({
           }
         } else {
           setModelBuildSuccess(false);
-          // Fallback to manual concatenation for all 24 positions
-          const fallbackModel = buildManualModelNumber(updatedSegments);
-          setDynamicModelNumber(fallbackModel);
-          
-          // Provide more descriptive error messaging
+          // Keep the manual model but don't reset segments
           const errorMessage = response?.errors?.[0] || "Model configuration may be invalid";
-          setModelBuildError(`${errorMessage}. Using fallback model: ${fallbackModel}`);
+          setModelBuildError(`${errorMessage}. Using fallback model: ${nextModel}`);
           
-          // Mark segments with potential issues
-          const segmentsWithErrors = markInvalidSegments(updatedSegments, response?.errors);
-          setNomenclatureSegments(segmentsWithErrors);
+          // Mark invalid but don't reset segment values
+          setNomenclatureSegments(prev => prev.map(segment => 
+            segment.position === position 
+              ? { ...segment, isValid: false, validationMessage: errorMessage }
+              : segment
+          ));
         }
       });
+    }
+  };
+
+  // Helper function to build model from segments
+  const buildModelFromSegments = (segments: typeof nomenclatureSegments): string => {
+    return segments.map(segment => segment.selectedValue || segment.code || 'X').join('');
+  };
+
+  // Keep original handleSegmentChange for backward compatibility but mark as deprecated
+  const handleSegmentChange = (segmentIndex: number, newValue: string) => {
+    const segment = nomenclatureSegments[segmentIndex];
+    if (segment) {
+      updateSegmentValue(segment.position, newValue);
     }
   };
 
@@ -1157,9 +1201,9 @@ export default function EnhancedUnitCard({
                               )}
                             </div>
                             <Select 
-                              value={segment.selectedValue || segment.options[0]?.value || ""} 
-                              onValueChange={(value) => handleSegmentChange(index, value)}
-                              data-testid={`select-segment-${index}`}
+                              value={segment.selectedValue ?? ""} 
+                              onValueChange={(value) => updateSegmentValue(segment.position, value)}
+                              data-testid={`select-segment-${segment.position}`}
                               disabled={modelBuilder.isBuilding}
                             >
                               <SelectTrigger className={`w-full transition-colors ${
@@ -1169,7 +1213,7 @@ export default function EnhancedUnitCard({
                                   ? "border-green-400 focus:border-green-500"
                                   : ""
                               }`}>
-                                <SelectValue />
+                                <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent>
                                 {segment.options.map((option) => (
