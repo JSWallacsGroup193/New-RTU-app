@@ -499,14 +499,18 @@ export default function EnhancedUnitCard({
     "Straight A/C": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
   };
 
-  const getEfficiencyBadge = (seer: number) => {
-    if (seer >= 16) return { label: "High Efficiency", color: "bg-green-500 text-white" };
-    if (seer >= 14) return { label: "Standard+", color: "bg-blue-500 text-white" };
-    return { label: "Standard", color: "bg-gray-500 text-white" };
+  const getEfficiencyBadge = (modelNumber: string) => {
+    // Determine efficiency from model number prefix (position 1: S=Standard, H=High efficiency)
+    const efficiencyCode = modelNumber.charAt(1) || "S";
+    if (efficiencyCode === "H") {
+      return { label: "High Efficiency", color: "bg-green-500 text-white" };
+    } else {
+      return { label: "Standard Efficiency", color: "bg-blue-500 text-white" };
+    }
   };
 
   const normalizedUnit = normalizeUnit(unit);
-  const efficiencyBadge = getEfficiencyBadge(normalizedUnit.seerRating);
+  const efficiencyBadge = getEfficiencyBadge(normalizedUnit.modelNumber);
 
   // Group factory options by category
   const factoryOptionsByCategory = unit.factoryOptions.reduce((acc, option) => {
