@@ -286,7 +286,7 @@ export default function EditableSpecificationForm({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Tonnage</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={optionsLoading}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={optionsLoading}>
                         <FormControl>
                           <SelectTrigger data-testid="select-tonnage">
                             <SelectValue placeholder="Select tonnage" />
@@ -320,7 +320,7 @@ export default function EditableSpecificationForm({
                             form.setValue("phases", combo.phases);
                           }
                         }} 
-                        defaultValue={field.value} 
+                        value={field.value} 
                         disabled={optionsLoading}
                       >
                         <FormControl>
@@ -348,7 +348,7 @@ export default function EditableSpecificationForm({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Efficiency</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={optionsLoading}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={optionsLoading}>
                         <FormControl>
                           <SelectTrigger data-testid="select-efficiency">
                             <SelectValue placeholder="Select efficiency" />
@@ -378,7 +378,7 @@ export default function EditableSpecificationForm({
                       <FormLabel className="text-xs">Gas BTU Output</FormLabel>
                       <Select 
                         onValueChange={(value) => field.onChange(parseInt(value))} 
-                        defaultValue={field.value?.toString()} 
+                        value={field.value?.toString() || ""} 
                         disabled={optionsLoading}
                       >
                         <FormControl>
@@ -409,7 +409,7 @@ export default function EditableSpecificationForm({
                       <FormLabel className="text-xs">Electric Heat Kit (kW)</FormLabel>
                       <Select 
                         onValueChange={(value) => field.onChange(parseFloat(value))} 
-                        defaultValue={field.value?.toString()} 
+                        value={field.value?.toString() || ""} 
                         disabled={optionsLoading}
                       >
                         <FormControl>
@@ -438,7 +438,7 @@ export default function EditableSpecificationForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs">Controls</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={optionsLoading}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={optionsLoading}>
                       <FormControl>
                         <SelectTrigger data-testid="select-controls">
                           <SelectValue placeholder="Select controls" />
