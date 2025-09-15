@@ -1655,14 +1655,20 @@ export class DaikinMatcher {
     // 1. Direct Match (closest available tonnage)
     const directUnit = findBestUnitForTonnage(direct, 'direct');
     if (directUnit) {
-      results.push(directUnit);
+      results.push({
+        ...directUnit,
+        sizeMatch: "direct" as const
+      });
     }
     
     // 2. Upsize (next larger tonnage)
     if (up !== null) {
       const upsizeUnit = findBestUnitForTonnage(up, 'upsize');
       if (upsizeUnit) {
-        results.push(upsizeUnit);
+        results.push({
+          ...upsizeUnit,
+          sizeMatch: "larger" as const
+        });
       }
     }
     
@@ -1670,7 +1676,10 @@ export class DaikinMatcher {
     if (down !== null) {
       const downsizeUnit = findBestUnitForTonnage(down, 'downsize');
       if (downsizeUnit) {
-        results.push(downsizeUnit);
+        results.push({
+          ...downsizeUnit,
+          sizeMatch: "smaller" as const
+        });
       }
     }
     

@@ -33,6 +33,7 @@ import InlineEditControls from "./InlineEditControls";
 import SystemTypeFilter from "./SystemTypeFilter";
 import ComparisonTable from "./ComparisonTable";
 import CreateProjectForm from "./CreateProjectForm";
+import SizingComparisonLayout from "./SizingComparisonLayout";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { exportSingleComparison, exportBulkComparison } from "@/lib/pdfService";
@@ -403,6 +404,21 @@ export default function SpecificationSearchResults({
       }
     });
   }, [enhancedUnits, selectedSystemType, maxSEER, maxSoundLevel, highEfficiencyOnly, quietOperationOnly, sortBy]);
+
+  // Detect if we have Direct/Up/Down sizing results for the comparison layout
+  const hasSizingComparison = useMemo(() => {
+    if (filteredAndSortedUnits.length < 2 || filteredAndSortedUnits.length > 3) return false;
+    
+    const sizeMatches = filteredAndSortedUnits.map(unit => (unit as any).sizeMatch).filter(Boolean);
+    if (sizeMatches.length !== filteredAndSortedUnits.length) return false;
+    
+    // Check if we have a valid combination of sizing types
+    const uniqueMatches = new Set(sizeMatches);
+    const hasDirectMatch = uniqueMatches.has("direct");
+    const hasVariation = uniqueMatches.size > 1;
+    
+    return hasDirectMatch && hasVariation;
+  }, [filteredAndSortedUnits]);
 
   // Selection handlers
   const handleSelectUnit = (unitId: string, selected: boolean) => {
@@ -1136,27 +1152,64 @@ export default function SpecificationSearchResults({
         </Label>
       </div>
 
-      {/* Results Grid/List */}
+      {/* Results Display - Sizing Comparison or Grid/List */}
       <div className="space-y-4">
         {filteredAndSortedUnits.length > 0 ? (
-          <div className={
-            viewMode === "grid" 
-              ? "grid gap-6 lg:grid-cols-1 xl:grid-cols-2" 
-              : "space-y-4"
-          }>
-            {filteredAndSortedUnits.map((unit) => (
-              <EnhancedUnitCard
-                key={unit.id}
-                unit={unit}
-                isSelected={selectedUnits.has(unit.id)}
-                onSelectionChange={(selected) => handleSelectUnit(unit.id, selected)}
-                onViewDetails={handleViewDetails}
-                onAddToProject={handleAddToProject}
-                onGenerateQuote={handleGenerateQuote}
-                family={getFamilyFromModelNumber(unit.modelNumber)}
-              />
-            ))}
-          </div>
+          hasSizingComparison ? (
+            <SizingComparisonLayout
+              units={filteredAndSortedUnits.map(unit => ({
+                id: unit.id,
+                modelNumber: unit.modelNumber,
+                systemType: unit.systemType,
+                btuCapacity: unit.btuCapacity,
+                tonnage: unit.tonnage,
+                voltage: unit.voltage,
+                phases: unit.phases,
+                sizeMatch: (unit as any).sizeMatch || "direct",
+                seerRating: unit.seerRating,
+                eerRating: unit.eerRating,
+                hspfRating: unit.hspfRating,
+                refrigerant: unit.refrigerant,
+                driveType: unit.driveType,
+                soundLevel: unit.soundLevel,
+                dimensions: unit.dimensions,
+                weight: unit.weight,
+                operatingAmperage: unit.operatingAmperage,
+                maxFuseSize: unit.maxFuseSize
+              }))}
+              onUnitSelect={(unit) => {
+                setSelectedUnits(new Set([unit.id]));
+                handleViewDetails(filteredAndSortedUnits.find(u => u.id === unit.id)!);
+              }}
+              onAddToProject={(unit) => {
+                const fullUnit = filteredAndSortedUnits.find(u => u.id === unit.id);
+                if (fullUnit) handleAddToProject(fullUnit);
+              }}
+              onViewDetails={(unit) => {
+                const fullUnit = filteredAndSortedUnits.find(u => u.id === unit.id);
+                if (fullUnit) handleViewDetails(fullUnit);
+              }}
+            />
+          ) : (
+            <div className={
+              viewMode === "grid" 
+                ? "grid gap-6 lg:grid-cols-1 xl:grid-cols-2" 
+                : "space-y-4"
+            }>
+              {filteredAndSortedUnits.map((unit) => (
+                <EnhancedUnitCard
+                  key={unit.id}
+                  unit={unit}
+                  isSelected={selectedUnits.has(unit.id)}
+                  onSelectionChange={(selected) => handleSelectUnit(unit.id, selected)}
+                  onViewDetails={handleViewDetails}
+                  onAddToProject={handleAddToProject}
+                  onGenerateQuote={handleGenerateQuote}
+                  family={getFamilyFromModelNumber(unit.modelNumber)}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <Card className="text-center py-8">
             <CardContent>

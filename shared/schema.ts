@@ -200,6 +200,7 @@ export const daikinUnitSpecSchema = z.object({
   btuCapacity: z.number(),
   voltage: voltageEnum,
   phases: phaseEnum,
+  sizeMatch: z.enum(["smaller", "direct", "larger"]).optional(),
   
   // Performance ratings
   seerRating: z.number(),
