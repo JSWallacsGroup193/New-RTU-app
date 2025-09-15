@@ -1043,7 +1043,10 @@ export default function EnhancedUnitCard({
                 {formatTonnage(unit.btuCapacity)} Tons
               </div>
               <div className="text-sm text-muted-foreground">
-                {unit.btuCapacity.toLocaleString()} BTU/h
+                {unit.systemType === "Gas/Electric" && unit.heatingBTU ? 
+                  `${unit.heatingBTU.toLocaleString()} BTU/h Heating` : 
+                  `${unit.btuCapacity.toLocaleString()} BTU/h Cooling`
+                }
               </div>
             </div>
           </div>
