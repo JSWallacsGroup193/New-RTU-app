@@ -628,7 +628,18 @@ export const builderMetadataSchema = z.object({
 
 export type BuilderMetadata = z.infer<typeof builderMetadataSchema>;
 
-// Advanced search result with builder metadata and tonnage categorization
+// Compatibility scoring breakdown schema
+export const compatibilityBreakdownSchema = z.object({
+  systemTypeMatch: z.number().min(0).max(25), // 25% weight
+  capacityMatch: z.number().min(0).max(30),    // 30% weight
+  voltageMatch: z.number().min(0).max(20),     // 20% weight
+  efficiencyMatch: z.number().min(0).max(15),  // 15% weight
+  heatingMatch: z.number().min(0).max(10)      // 10% weight
+});
+
+export type CompatibilityBreakdown = z.infer<typeof compatibilityBreakdownSchema>;
+
+// Advanced search result with builder metadata, tonnage categorization, and compatibility scoring
 export const advancedResultSchema = z.object({
   id: z.string(),
   modelNumber: z.string(),
@@ -645,12 +656,35 @@ export const advancedResultSchema = z.object({
   builderMetadata: builderMetadataSchema,
   sizingCategory: z.enum(["direct", "upsize", "downsize"]), // Relationship to search tonnage
   sizingRatio: z.number(), // unit tonnage / search tonnage
-  percentDifference: z.number() // Percentage difference from search tonnage
+  percentDifference: z.number(), // Percentage difference from search tonnage
+  // Professional compatibility scoring
+  compatibilityScore: z.number().min(0).max(100), // Overall weighted compatibility score
+  compatibilityBreakdown: compatibilityBreakdownSchema, // Detailed scoring breakdown
 });
 
 export type AdvancedResult = z.infer<typeof advancedResultSchema>;
 
-// Advanced search response with categorized results
+// Professional features metadata schemas
+export const methodologyMetadataSchema = z.object({
+  inputTonnage: z.number(),
+  targetSizing: z.object({
+    direct: z.number(),
+    upsize: z.number().nullable(),
+    downsize: z.number().nullable()
+  }),
+  sizingStrategy: z.string(),
+  recommendationLogic: z.string()
+});
+
+export const realTimeMetadataSchema = z.object({
+  searchId: z.string(),
+  timestamp: z.string(),
+  processingTime: z.number(),
+  totalResults: z.number(),
+  confidence: z.number().min(0).max(100)
+});
+
+// Advanced search response with categorized results and professional features
 export const advancedSpecSearchResponseSchema = z.object({
   directSizing: z.array(advancedResultSchema), // Exact tonnage matches
   upsizing: z.array(advancedResultSchema),     // Larger tonnage options
@@ -663,7 +697,10 @@ export const advancedSpecSearchResponseSchema = z.object({
     downsizeCount: z.number(),
     searchTonnage: tonnageEnum,
     availableTonnages: z.array(tonnageEnum) // What Daikin offers for this system type
-  })
+  }),
+  // Professional features
+  methodology: methodologyMetadataSchema.optional(),
+  realTimeMetadata: realTimeMetadataSchema.optional()
 });
 
 export type AdvancedSpecSearchResponse = z.infer<typeof advancedSpecSearchResponseSchema>;

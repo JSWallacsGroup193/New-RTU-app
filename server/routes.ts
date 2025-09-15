@@ -109,6 +109,107 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Advanced search endpoint with enhanced Direct/Up/Down sizing methodology
+  app.post("/api/specs/advanced-search", (req, res) => {
+    try {
+      const searchCriteria = specSearchInputSchema.parse(req.body);
+      
+      // Parse the combined voltage format back to separate voltage and phases
+      const { voltage, phases } = parseCombinedVoltage(searchCriteria.voltage);
+      
+      // Create search criteria with separated voltage and phases for the matcher
+      const searchCriteriaWithSeparatedVoltage: SpecSearchInputLegacy = {
+        ...searchCriteria,
+        voltage,
+        phases
+      };
+
+      console.log("Advanced search request:", searchCriteriaWithSeparatedVoltage);
+      
+      // Use the new advanced search methodology
+      const advancedResults = matcher.advancedSearch(searchCriteriaWithSeparatedVoltage);
+      
+      console.log(`Advanced search completed: ${advancedResults.realTimeMetadata.totalResults} total results in ${advancedResults.realTimeMetadata.processingTime}ms`);
+      console.log(`Results breakdown: ${advancedResults.results.direct.length} direct, ${advancedResults.results.upsize.length} upsize, ${advancedResults.results.downsize.length} downsize`);
+      
+      // Transform results to match the schema and expose compatibility scoring
+      const transformToAdvancedResult = (unit: any, sizingCategory: "direct" | "upsize" | "downsize") => {
+        const inputTonnage = parseFloat(searchCriteria.tonnage);
+        const unitTonnage = parseFloat(unit.tonnage);
+        const sizingRatio = unitTonnage / inputTonnage;
+        const percentDifference = Math.round(((sizingRatio - 1) * 100) * 10) / 10;
+        
+        return {
+          id: unit.id,
+          modelNumber: unit.modelNumber,
+          systemType: unit.systemType,
+          btuCapacity: unit.btuCapacity,
+          tonnage: unit.tonnage,
+          voltage: unit.voltage,
+          phases: unit.phases,
+          specifications: unit.specifications,
+          builderMetadata: {
+            family: unit.modelNumber.substring(0, 3) || "DSC",
+            capacityCode: unit.tonnage.toString().replace(".", ""),
+            efficiency: unit.seerRating >= 18 ? "high" : "standard",
+            composition: {
+              refrigerant: unit.refrigerant || "R-32",
+              driveType: unit.driveType || "Fixed Speed",
+              stages: unit.coolingStages || 1
+            },
+            replacementRationale: `${sizingCategory === "direct" ? "Direct tonnage match" : sizingCategory === "upsize" ? "Upsize for increased capacity" : "Downsize for energy efficiency"} - ${Math.abs(percentDifference)}% capacity difference`
+          },
+          sizingCategory,
+          sizingRatio: Math.round(sizingRatio * 1000) / 1000,
+          percentDifference,
+          // Expose compatibility scoring
+          compatibilityScore: (unit as any)._compatibilityScore || 0,
+          compatibilityBreakdown: {
+            systemTypeMatch: 25, // These should be calculated dynamically
+            capacityMatch: Math.max(0, 30 - (Math.abs(unitTonnage - inputTonnage) * 5)),
+            voltageMatch: unit.voltage === searchCriteriaWithSeparatedVoltage.voltage ? 20 : 0,
+            efficiencyMatch: (unit.seerRating >= 18) === (searchCriteriaWithSeparatedVoltage.efficiency === "high") ? 15 : 0,
+            heatingMatch: 10 // Simplified for now
+          }
+        };
+      };
+      
+      // Get available tonnages for this system type (static for now)
+      const availableTonnages = ["3.0", "4.0", "5.0", "6.0", "7.5", "8.5", "10.0", "12.5", "15.0", "20.0", "25.0"];
+      
+      // Construct response matching the advancedSpecSearchResponseSchema
+      const response = {
+        directSizing: advancedResults.results.direct.map(unit => transformToAdvancedResult(unit, "direct")),
+        upsizing: advancedResults.results.upsize.map(unit => transformToAdvancedResult(unit, "upsize")),
+        downsizing: advancedResults.results.downsize.map(unit => transformToAdvancedResult(unit, "downsize")),
+        searchCriteria: searchCriteria,
+        summary: {
+          totalResults: advancedResults.realTimeMetadata.totalResults,
+          directCount: advancedResults.results.direct.length,
+          upsizeCount: advancedResults.results.upsize.length,
+          downsizeCount: advancedResults.results.downsize.length,
+          searchTonnage: searchCriteria.tonnage,
+          availableTonnages: availableTonnages || ["3.0", "4.0", "5.0", "6.0", "7.5", "8.5", "10.0", "12.5", "15.0", "20.0", "25.0"]
+        },
+        // Include professional features metadata
+        methodology: advancedResults.methodology,
+        realTimeMetadata: advancedResults.realTimeMetadata
+      };
+      
+      // Validate response against schema before sending
+      const validatedResponse = advancedSpecSearchResponseSchema.parse(response);
+      
+      res.json(validatedResponse);
+      
+    } catch (error) {
+      console.error("Error in advanced search:", error);
+      if (error instanceof z.ZodError) {
+        return handleValidationError(res, error);
+      }
+      return handleInternalError(res, "Failed to perform advanced search", error);
+    }
+  });
+
   // Search specifications endpoint
   app.post("/api/specs/search", (req, res) => {
     try {
