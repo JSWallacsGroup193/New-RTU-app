@@ -1428,16 +1428,20 @@ export class DaikinMatcher {
     // Extract voltage code from position 7 of the model (0-indexed position 6)
     const voltageCode = model.charAt(6);
     
-    // Map voltage codes to expected filtering format
-    const voltageMap: Record<string, string> = {
-      "1": "208-230/1/60",
-      "3": "208-230/3/60", 
-      "4": "460/3/60",
-      "7": "575/3/60"
+    // Map voltage codes to base voltage values, then combine with user-selected phases
+    const baseVoltageMap: Record<string, string> = {
+      "1": "208-230",
+      "3": "208-230", 
+      "4": "460",
+      "7": "575"
     };
     
-    const voltage = voltageMap[voltageCode] || "208-230/3/60"; // Default fallback
-    console.log(`        Voltage extraction: model="${model}", position 6="${voltageCode}", mapped to="${voltage}"`);
+    const baseVoltage = baseVoltageMap[voltageCode] || "208-230";
+    
+    // Combine with user-selected phases to create full voltage string
+    const voltage = `${baseVoltage}/${phases}/60`;
+    
+    console.log(`        Voltage extraction: model="${model}", position 6="${voltageCode}", phases="${phases}", mapped to="${voltage}"`);
     return voltage;
   }
 
