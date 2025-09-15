@@ -157,7 +157,12 @@ export default function SpecificationCard({
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium">{btuCapacity.toLocaleString()}</p>
+              <p className="text-sm font-medium">
+                {systemType === "Gas/Electric" && specifications.find(spec => spec.label.toLowerCase().includes('heating btu')) ? 
+                  `${specifications.find(spec => spec.label.toLowerCase().includes('heating btu'))?.value} Heating` : 
+                  `${btuCapacity.toLocaleString()} Cooling`
+                }
+              </p>
               <p className="text-xs text-muted-foreground">BTU/hr</p>
             </div>
           </div>

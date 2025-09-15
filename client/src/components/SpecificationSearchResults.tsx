@@ -1441,8 +1441,15 @@ export default function SpecificationSearchResults({
                       <span className="font-medium">{selectedUnitDetails.systemType}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">BTU Capacity:</span>
-                      <span className="font-medium">{selectedUnitDetails.btuCapacity.toLocaleString()} BTU/hr</span>
+                      <span className="text-muted-foreground">
+                        {selectedUnitDetails.systemType === "Gas/Electric" && selectedUnitDetails.heatingBTU ? "Heating BTU:" : "BTU Capacity:"}
+                      </span>
+                      <span className="font-medium">
+                        {selectedUnitDetails.systemType === "Gas/Electric" && selectedUnitDetails.heatingBTU ? 
+                          `${selectedUnitDetails.heatingBTU.toLocaleString()} BTU/hr` : 
+                          `${selectedUnitDetails.btuCapacity.toLocaleString()} BTU/hr`
+                        }
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tonnage:</span>

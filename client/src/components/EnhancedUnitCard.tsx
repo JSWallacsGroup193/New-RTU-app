@@ -1286,8 +1286,15 @@ export default function EnhancedUnitCard({
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium">{unit.btuCapacity.toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground">Cooling BTU/hr</p>
+              <p className="text-sm font-medium">
+                {unit.systemType === "Gas/Electric" && unit.heatingBTU ? 
+                  `${unit.heatingBTU.toLocaleString()} Heating` : 
+                  `${unit.btuCapacity.toLocaleString()} Cooling`
+                }
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {unit.systemType === "Gas/Electric" && unit.heatingBTU ? "Heating BTU/hr" : "Cooling BTU/hr"}
+              </p>
             </div>
           </div>
           {/* Display Heating BTU for Gas/Electric systems */}
