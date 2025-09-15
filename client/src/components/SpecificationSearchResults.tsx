@@ -27,7 +27,7 @@ import {
   Plus
 } from "lucide-react";
 import { useState, useMemo } from "react";
-import { SpecSearchResponse, type SpecSearchInput, parseCombinedVoltage, DaikinFamilyKeys } from "@shared/schema";
+import { SpecSearchResponse, type SpecSearchInput, parseCombinedVoltage, DaikinFamilyKeys, type EnhancedUnit } from "@shared/schema";
 import EnhancedUnitCard from "./EnhancedUnitCard";
 import InlineEditControls from "./InlineEditControls";
 import SystemTypeFilter from "./SystemTypeFilter";
@@ -147,49 +147,6 @@ interface SpecificationSearchResultsProps {
   onUpdateSearch?: (newParams: SpecSearchInput) => void;
 }
 
-// Enhanced unit interface with factory options and accessories
-interface EnhancedUnit {
-  id: string;
-  modelNumber: string;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  tonnage: string;
-  voltage: string;
-  phases: string;
-  sizeMatch: "smaller" | "direct" | "larger";
-  seerRating: number;
-  eerRating?: number;
-  hspfRating?: number;
-  refrigerant: string;
-  driveType: string;
-  coolingStages: number;
-  heatingStages?: number;
-  soundLevel: number;
-  dimensions: { length: number; width: number; height: number };
-  weight: number;
-  operatingAmperage: number;
-  maxFuseSize: number;
-  temperatureRange: {
-    cooling: { min: number; max: number };
-    heating?: { min: number; max: number };
-  };
-  controlsType: string;
-  coilType: string;
-  factoryOptions: Array<{
-    category: string;
-    code: string;
-    description: string;
-    priceAdder?: number;
-    availability: "Standard" | "Optional" | "N/A";
-  }>;
-  fieldAccessories: Array<{
-    category: string;
-    code: string;
-    description: string;
-    complexity: "Easy" | "Moderate" | "Professional Required";
-    compatible: boolean;
-  }>;
-}
 
 type SortOption = 
   | "efficiency-desc" 
@@ -307,37 +264,128 @@ export default function SpecificationSearchResults({
         phases: unit.phases,
         sizeMatch: (unit as any).sizeMatch as "smaller" | "direct" | "larger", // Use actual sizeMatch from API response
         
-        // AUTHENTIC PERFORMANCE SPECIFICATIONS
+        // FLAT PROPERTIES FOR BACKWARD COMPATIBILITY
         seerRating: authenticallyCalculatedSeer,
         eerRating: familySpecs.eer,
         hspfRating: unit.systemType === "Heat Pump" ? (hspfRating || familySpecs.hspf) : undefined,
-        
-        // AUTHENTIC TECHNICAL SPECIFICATIONS
         refrigerant: "R-32",
         driveType: driveType || familySpecs.driveType,
         coolingStages: coolingStages || familySpecs.stages,
         heatingStages: unit.systemType !== "Straight A/C" ? (heatingStages || familySpecs.stages) : undefined,
         soundLevel: authenticallyCalculatedSound,
-        
-        // AUTHENTIC PHYSICAL SPECIFICATIONS
         dimensions: authenticallyCalculatedDimensions,
         weight: authenticallyCalculatedWeight,
-        operatingAmperage: 15 + (tonnage * 2.5), // Authentic calculation: ~2.5A per ton base load
-        maxFuseSize: Math.ceil((15 + (tonnage * 2.5)) * 1.75), // 175% of operating amperage
-        
-        // AUTHENTIC OPERATING SPECIFICATIONS
+        operatingAmperage: 15 + (tonnage * 2.5),
+        maxFuseSize: Math.ceil((15 + (tonnage * 2.5)) * 1.75),
         temperatureRange: {
           cooling: { min: 65, max: 115 },
           heating: unit.systemType !== "Straight A/C" ? { min: familyCode.includes("H") ? -10 : -5, max: 65 } : undefined
         },
         controlsType: familySpecs.efficiency === "High" ? "Intelligent Touch" : "Digital Control",
         coilType: familySpecs.efficiency === "High" ? "Microchannel" : "Copper Tube",
-        
-        // AUTHENTIC FACTORY OPTIONS from Daikin catalog
         factoryOptions: [
           ...relevantElectricalOptions,
           ...relevantControlOptions
         ],
+
+        // NESTED PERFORMANCE RATINGS STRUCTURE
+        performanceRatings: {
+          seerRating: authenticallyCalculatedSeer,
+          eerRating: familySpecs.eer,
+          hspfRating: unit.systemType === "Heat Pump" ? (hspfRating || familySpecs.hspf) : undefined,
+        },
+        
+        // NESTED PHYSICAL SPECIFICATIONS STRUCTURE
+        physicalSpecs: {
+          dimensions: {
+            length: authenticallyCalculatedDimensions.length || 0,
+            width: authenticallyCalculatedDimensions.width || 0,
+            height: authenticallyCalculatedDimensions.height || 0,
+          },
+          weight: {
+            operating: authenticallyCalculatedWeight,
+            shipping: authenticallyCalculatedWeight + 50, // Estimate shipping weight
+          },
+          clearances: {
+            sides: 18,
+            back: 24,
+            front: 36,
+            top: 36,
+          },
+          serviceAccess: {
+            controlPanel: "Front",
+            refrigerantConnections: "Back",
+            electricalConnections: "Side",
+          },
+          footprint: {
+            area: Math.ceil((authenticallyCalculatedDimensions.length * authenticallyCalculatedDimensions.width) / 144), // sq ft
+            foundation: "Concrete pad",
+          }
+        },
+        
+        // NESTED ELECTRICAL SPECIFICATIONS STRUCTURE  
+        electricalSpecs: {
+          operatingAmperage: {
+            cooling: {
+              rla: 15 + (tonnage * 2.5),
+              mca: Math.ceil((15 + (tonnage * 2.5)) * 1.25),
+              lra: Math.ceil((15 + (tonnage * 2.5)) * 5),
+            },
+            heating: unit.systemType !== "Straight A/C" ? {
+              rla: 12 + (tonnage * 2),
+              mca: Math.ceil((12 + (tonnage * 2)) * 1.25),
+              lra: Math.ceil((12 + (tonnage * 2)) * 4),
+            } : undefined,
+            fan: {
+              fla: 2 + (tonnage * 0.5),
+            }
+          },
+          protection: {
+            maxFuseSize: Math.ceil((15 + (tonnage * 2.5)) * 1.75),
+            maxBreaker: Math.ceil((15 + (tonnage * 2.5)) * 1.75),
+          }
+        },
+        
+        // NESTED AIRFLOW SPECIFICATIONS STRUCTURE
+        airflowSpecs: {
+          nominalCfm: Math.ceil(tonnage * 400), // Standard 400 CFM per ton
+          availableEsp: 0.5, // Standard external static pressure
+          fanType: familySpecs.efficiency === "High" ? "Variable Speed ECM" : "Fixed Speed PSC",
+        },
+        
+        // NESTED SOUND SPECIFICATIONS STRUCTURE
+        soundSpecs: {
+          operatingLevel: authenticallyCalculatedSound,
+          testStandard: "AHRI 270",
+          measurement: {
+            distance: "23 feet",
+            conditions: "Free field"
+          }
+        },
+        
+        // NESTED REFRIGERANT SYSTEM STRUCTURE
+        refrigerantSystem: {
+          type: "R-32",
+          charge: Math.ceil(tonnage * 2), // Estimated charge
+          lineSetSize: {
+            liquid: tonnage <= 3 ? "3/8\"" : "1/2\"",
+            suction: tonnage <= 3 ? "7/8\"" : "1-1/8\"",
+          }
+        },
+        
+        // FEATURES STRUCTURE
+        features: {
+          standard: [
+            "R-32 Refrigerant",
+            familySpecs.driveType,
+            "Digital Controls",
+            "High Efficiency Filter"
+          ],
+          optional: [
+            ...relevantElectricalOptions.map(opt => opt.description),
+            ...relevantControlOptions.map(opt => opt.description)
+          ]
+        },
         
         // AUTHENTIC FIELD ACCESSORIES from Daikin catalog
         fieldAccessories: FIELD_ACCESSORIES.slice(0, 6) // Representative selection
@@ -1170,14 +1218,16 @@ export default function SpecificationSearchResults({
                 tonnage: unit.tonnage,
                 voltage: unit.voltage,
                 phases: unit.phases,
-                sizeMatch: (unit as any).sizeMatch as "smaller" | "direct" | "larger",
+                sizeMatch: unit.sizeMatch,
                 seerRating: unit.seerRating,
                 eerRating: unit.eerRating,
                 hspfRating: unit.hspfRating,
                 refrigerant: unit.refrigerant,
                 driveType: unit.driveType,
                 soundLevel: unit.soundLevel,
-                dimensions: unit.dimensions,
+                dimensions: typeof unit.dimensions === 'string' 
+                  ? { length: 0, width: 0, height: 0 } 
+                  : unit.dimensions,
                 weight: unit.weight,
                 operatingAmperage: unit.operatingAmperage,
                 maxFuseSize: unit.maxFuseSize

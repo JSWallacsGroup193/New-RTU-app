@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRealTimeModelBuilder } from "@/hooks/useModelBuilder";
-import type { BuildModelRequest, DaikinFamilyKeys } from "@shared/schema";
+import type { BuildModelRequest, DaikinFamilyKeys, EnhancedUnit } from "@shared/schema";
 
 // Normalize unit data to handle both nested and flat structures
 function normalizeUnit(unit: EnhancedUnit): EnhancedUnit & {
@@ -76,352 +76,6 @@ interface FieldAccessory {
   compatible: boolean;
 }
 
-// Enhanced unit interface with comprehensive technical specifications
-interface EnhancedUnit {
-  id: string;
-  modelNumber: string;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  tonnage: string;
-  voltage: string;
-  phases: string;
-  sizeMatch: "smaller" | "direct" | "larger";
-  
-  // Comprehensive Performance Ratings
-  performanceRatings: {
-    // Standard Ratings
-    seerRating: number;
-    seer2Rating?: number;
-    eerRating?: number;
-    eer2Rating?: number;
-    hspfRating?: number;
-    hspf2Rating?: number;
-    
-    // Advanced Commercial Ratings
-    ieerRating?: number; // Integrated Energy Efficiency Ratio
-    iplvRating?: number; // Integrated Part Load Value
-    copRating?: number; // Coefficient of Performance
-    
-    // Part Load Performance
-    partLoadEfficiency?: {
-      at25Percent: number;
-      at50Percent: number;
-      at75Percent: number;
-      at100Percent: number;
-    };
-    
-    // Temperature-based performance
-    capacityRetention?: {
-      at5F: number; // % capacity at 5°F for heat pumps
-      at17F: number; // % capacity at 17°F for heat pumps
-    };
-  };
-  
-  // Complete Physical Specifications
-  physicalSpecs: {
-    dimensions: {
-      length: number; // inches
-      width: number;
-      height: number;
-    };
-    weight: {
-      operating: number; // lbs
-      shipping: number;
-    };
-    clearances: {
-      sides: number; // inches
-      back: number;
-      front: number;
-      top: number;
-    };
-    serviceAccess: {
-      controlPanel: string; // "Front", "Side", "Top"
-      refrigerantConnections: string;
-      electricalConnections: string;
-    };
-    footprint: {
-      area: number; // square feet
-      foundation: string; // "Concrete pad", "Roof curb", etc.
-    };
-  };
-  
-  // Comprehensive Electrical Specifications
-  electricalSpecs: {
-    // Operating Characteristics
-    operatingAmperage: {
-      cooling: {
-        rla: number; // Rated Load Amps
-        mca: number; // Minimum Circuit Ampacity
-        lra: number; // Locked Rotor Amps
-      };
-      heating?: {
-        rla: number;
-        mca: number;
-        lra: number;
-      };
-      fan: {
-        fla: number; // Full Load Amps
-      };
-    };
-    
-    // Protection Requirements
-    protection: {
-      maxFuseSize: number;
-      maxBreaker: number;
-      minimumWireSize: string; // "12 AWG", "10 AWG", etc.
-      groundWireSize: string;
-    };
-    
-    // Disconnect and Control
-    disconnect: {
-      required: boolean;
-      ampRating: number;
-      type: string; // "Fused", "Non-fused", "GFCI"
-    };
-    
-    // Power Requirements
-    powerConsumption: {
-      cooling: {
-        fullLoad: number; // kW
-        partLoad: number;
-      };
-      heating?: {
-        fullLoad: number;
-        partLoad: number;
-      };
-      standby: number; // Watts
-    };
-  };
-  
-  // Airflow and Fan Performance
-  airflowSpecs: {
-    // Cooling Airflow
-    coolingAirflow: {
-      nominalCfm: number;
-      cfmPerTon: number;
-      externalStaticPressure: {
-        standard: number; // inches w.c.
-        maximum: number;
-      };
-    };
-    
-    // Heating Airflow (if applicable)
-    heatingAirflow?: {
-      nominalCfm: number;
-      temperatureRise: {
-        minimum: number; // °F
-        maximum: number;
-      };
-    };
-    
-    // Fan Performance
-    fanSpecs: {
-      type: string; // "Centrifugal", "Axial", "Mixed Flow"
-      speed: {
-        low?: number; // RPM
-        medium?: number;
-        high: number;
-      };
-      motorHp: number;
-      bearingType: string;
-    };
-    
-    // Performance Curves
-    performanceCurve?: {
-      cfmAtStaticPressures: Array<{
-        staticPressure: number; // inches w.c.
-        cfm: number;
-        bhp: number; // Brake horsepower
-      }>;
-    };
-  };
-  
-  // Comprehensive Sound Data
-  soundSpecs: {
-    // Overall Sound Levels
-    soundPower: {
-      cooling: number; // dB(A)
-      heating?: number;
-    };
-    soundPressure: {
-      cooling: number; // dB(A) at 10 feet
-      heating?: number;
-    };
-    
-    // Octave Band Analysis
-    octaveBands?: {
-      cooling: {
-        hz63: number;
-        hz125: number;
-        hz250: number;
-        hz500: number;
-        hz1000: number;
-        hz2000: number;
-        hz4000: number;
-        hz8000: number;
-      };
-      heating?: {
-        hz63: number;
-        hz125: number;
-        hz250: number;
-        hz500: number;
-        hz1000: number;
-        hz2000: number;
-        hz4000: number;
-        hz8000: number;
-      };
-    };
-    
-    // Sound Attenuation Options
-    attenuationOptions?: Array<{
-      type: string; // "Compressor blanket", "Fan silencer"
-      reduction: number; // dB reduction
-      frequencies: string; // "Low", "Mid", "High", "Broadband"
-    }>;
-  };
-  
-  // Refrigerant System Specifications
-  refrigerantSpecs: {
-    type: string; // "R-410A", "R-32", "R-454B"
-    charge: {
-      factory: number; // lbs
-      field: number; // Additional field charge if needed
-      total: number;
-    };
-    
-    // Connection Sizes
-    connections: {
-      liquid: {
-        size: string; // "3/8\"", "1/2\"", etc.
-        type: string; // "Sweat", "Flare", "Brazen"
-      };
-      suction: {
-        size: string;
-        type: string;
-      };
-      hotGas?: {
-        size: string;
-        type: string;
-      };
-    };
-    
-    // Operating Pressures
-    operatingPressures: {
-      cooling: {
-        lowSide: { min: number; max: number }; // psig
-        highSide: { min: number; max: number };
-      };
-      heating?: {
-        lowSide: { min: number; max: number };
-        highSide: { min: number; max: number };
-      };
-    };
-    
-    // System Components
-    systemComponents: {
-      expansionDevice: string; // "TXV", "EEV", "Capillary"
-      filterDrier: string;
-      sightGlass: boolean;
-      serviceValves: boolean;
-    };
-  };
-  
-  // System Features and Controls
-  systemFeatures: {
-    // Staging and Capacity Control
-    capacity: {
-      coolingStages: number;
-      heatingStages?: number;
-      modulation: boolean; // Variable capacity
-      turndownRatio?: number; // For modulating units
-    };
-    
-    // Control Systems
-    controls: {
-      type: string; // "Electromechanical", "DDC", "Smart"
-      interface: string; // "Thermostat", "BMS", "App"
-      features: string[];
-      communicationProtocols?: string[]; // "BACnet", "Modbus", "LonWorks"
-    };
-    
-    // Indoor Air Quality Features
-    iaqFeatures: {
-      filtration: {
-        standard: string; // "1-inch throwaway", "MERV 8"
-        optional: string[]; // Available upgrades
-      };
-      ventilation: {
-        economizer: boolean;
-        freshAirIntake: boolean;
-        erv: boolean; // Energy Recovery Ventilation
-        demandControlled: boolean;
-      };
-      airPurification?: {
-        uvLights: boolean;
-        ionization: boolean;
-        photocatalyticOxidation: boolean;
-      };
-    };
-    
-    // Advanced Features
-    advancedFeatures: {
-      diagnostics: string[]; // "Fault detection", "Performance monitoring"
-      connectivity: string[]; // "Wi-Fi", "Ethernet", "Cellular"
-      zoning: boolean;
-      scheduling: boolean;
-      loadShedding: boolean;
-    };
-  };
-  
-  // Operating Conditions and Limits
-  operatingConditions: {
-    temperatureRange: {
-      cooling: { min: number; max: number }; // °F ambient
-      heating?: { min: number; max: number };
-    };
-    altitudeLimit: number; // feet above sea level
-    humidityRange: {
-      min: number; // % RH
-      max: number;
-    };
-    specialEnvironments?: {
-      coastal: boolean;
-      industrial: boolean;
-      corrosiveAtmosphere: boolean;
-    };
-  };
-  
-  // Technical specifications
-  refrigerant: string;
-  driveType: string;
-  coolingStages: number;
-  heatingStages?: number;
-  soundLevel: number;
-  
-  // Legacy dimensions for backward compatibility
-  dimensions: {
-    length: number;
-    width: number;
-    height: number;
-  };
-  weight: number;
-  
-  // Legacy electrical for backward compatibility
-  operatingAmperage: number;
-  maxFuseSize: number;
-  
-  // Advanced specifications
-  temperatureRange: {
-    cooling: { min: number; max: number };
-    heating?: { min: number; max: number };
-  };
-  controlsType: string;
-  coilType: string;
-  
-  // Factory options and accessories
-  factoryOptions: FactoryOption[];
-  fieldAccessories: FieldAccessory[];
-}
 
 interface EnhancedUnitCardProps {
   unit: EnhancedUnit;
@@ -489,7 +143,7 @@ export default function EnhancedUnitCard({
     },
     larger: {
       label: "Size Larger", 
-      color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+      color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
     }
   };
 
@@ -513,14 +167,14 @@ export default function EnhancedUnitCard({
   const efficiencyBadge = getEfficiencyBadge(normalizedUnit.modelNumber);
 
   // Group factory options by category
-  const factoryOptionsByCategory = unit.factoryOptions.reduce((acc, option) => {
+  const factoryOptionsByCategory = (unit.factoryOptions || []).reduce((acc, option) => {
     if (!acc[option.category]) acc[option.category] = [];
     acc[option.category].push(option);
     return acc;
   }, {} as Record<string, FactoryOption[]>);
 
   // Group field accessories by category
-  const fieldAccessoriesByCategory = unit.fieldAccessories.reduce((acc, accessory) => {
+  const fieldAccessoriesByCategory = (unit.fieldAccessories || []).reduce((acc, accessory) => {
     if (!acc[accessory.category]) acc[accessory.category] = [];
     acc[accessory.category].push(accessory);
     return acc;
@@ -1592,9 +1246,12 @@ export default function EnhancedUnitCard({
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Dimensions (L×W×H):</span>
                           <span className="font-medium">
-                            {unit.physicalSpecs?.dimensions?.length || unit.dimensions.length}" × 
-                            {unit.physicalSpecs?.dimensions?.width || unit.dimensions.width}" × 
-                            {unit.physicalSpecs?.dimensions?.height || unit.dimensions.height}"
+                            {unit.physicalSpecs?.dimensions ? 
+                              `${unit.physicalSpecs.dimensions.length}" × ${unit.physicalSpecs.dimensions.width}" × ${unit.physicalSpecs.dimensions.height}"` :
+                              typeof unit.dimensions === 'object' ? 
+                                `${unit.dimensions.length}" × ${unit.dimensions.width}" × ${unit.dimensions.height}"` :
+                                unit.dimensions
+                            }
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1718,60 +1375,10 @@ export default function EnhancedUnitCard({
                             <span className="font-medium">{unit.electricalSpecs.protection.maxBreaker}A</span>
                           </div>
                         )}
-                        {unit.electricalSpecs?.protection?.minimumWireSize && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Min Wire Size:</span>
-                            <span className="font-medium">{unit.electricalSpecs.protection.minimumWireSize}</span>
-                          </div>
-                        )}
-                        {unit.electricalSpecs?.protection?.groundWireSize && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Ground Wire:</span>
-                            <span className="font-medium">{unit.electricalSpecs.protection.groundWireSize}</span>
-                          </div>
-                        )}
-                        {unit.electricalSpecs?.disconnect && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Disconnect:</span>
-                            <span className="font-medium">{unit.electricalSpecs.disconnect.ampRating}A {unit.electricalSpecs.disconnect.type}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Power Consumption */}
-                  {unit.electricalSpecs?.powerConsumption && (
-                    <div className="border rounded-lg p-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Power Consumption</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs mb-1">Cooling Full Load</div>
-                          <div className="font-semibold">{unit.electricalSpecs.powerConsumption.cooling.fullLoad} kW</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs mb-1">Cooling Part Load</div>
-                          <div className="font-semibold">{unit.electricalSpecs.powerConsumption.cooling.partLoad} kW</div>
-                        </div>
-                        {unit.electricalSpecs.powerConsumption.heating && (
-                          <>
-                            <div className="text-center">
-                              <div className="text-muted-foreground text-xs mb-1">Heating Full Load</div>
-                              <div className="font-semibold">{unit.electricalSpecs.powerConsumption.heating.fullLoad} kW</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-muted-foreground text-xs mb-1">Heating Part Load</div>
-                              <div className="font-semibold">{unit.electricalSpecs.powerConsumption.heating.partLoad} kW</div>
-                            </div>
-                          </>
-                        )}
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs mb-1">Standby</div>
-                          <div className="font-semibold">{unit.electricalSpecs.powerConsumption.standby} W</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Airflow Specifications */}
@@ -1786,77 +1393,24 @@ export default function EnhancedUnitCard({
                     <div className="border rounded-lg p-4">
                       <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Airflow Data</h5>
                       <div className="space-y-3 text-sm">
-                        {unit.airflowSpecs?.coolingAirflow && (
+                        {unit.airflowSpecs && (
                           <>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Nominal CFM:</span>
-                              <span className="font-medium">{unit.airflowSpecs.coolingAirflow.nominalCfm.toLocaleString()}</span>
+                              <span className="font-medium">{unit.airflowSpecs.nominalCfm.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">CFM per Ton:</span>
-                              <span className="font-medium">{unit.airflowSpecs.coolingAirflow.cfmPerTon}</span>
+                              <span className="text-muted-foreground">Available ESP:</span>
+                              <span className="font-medium">{unit.airflowSpecs.availableEsp}" w.c.</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Std ESP:</span>
-                              <span className="font-medium">{unit.airflowSpecs.coolingAirflow.externalStaticPressure.standard}" w.c.</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Max ESP:</span>
-                              <span className="font-medium">{unit.airflowSpecs.coolingAirflow.externalStaticPressure.maximum}" w.c.</span>
-                            </div>
-                          </>
-                        )}
-                        {unit.airflowSpecs?.heatingAirflow && (
-                          <>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Heating CFM:</span>
-                              <span className="font-medium">{unit.airflowSpecs.heatingAirflow.nominalCfm.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Temp Rise:</span>
-                              <span className="font-medium">{unit.airflowSpecs.heatingAirflow.temperatureRise.minimum}-{unit.airflowSpecs.heatingAirflow.temperatureRise.maximum}°F</span>
+                              <span className="text-muted-foreground">Fan Type:</span>
+                              <span className="font-medium">{unit.airflowSpecs.fanType}</span>
                             </div>
                           </>
                         )}
                       </div>
                     </div>
-
-                    {/* Fan Specifications */}
-                    {unit.airflowSpecs?.fanSpecs && (
-                      <div className="border rounded-lg p-4">
-                        <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Fan Specifications</h5>
-                        <div className="space-y-3 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Fan Type:</span>
-                            <span className="font-medium">{unit.airflowSpecs.fanSpecs.type}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Motor HP:</span>
-                            <span className="font-medium">{unit.airflowSpecs.fanSpecs.motorHp} HP</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">High Speed:</span>
-                            <span className="font-medium">{unit.airflowSpecs.fanSpecs.speed.high} RPM</span>
-                          </div>
-                          {unit.airflowSpecs.fanSpecs.speed.medium && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Medium Speed:</span>
-                              <span className="font-medium">{unit.airflowSpecs.fanSpecs.speed.medium} RPM</span>
-                            </div>
-                          )}
-                          {unit.airflowSpecs.fanSpecs.speed.low && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Low Speed:</span>
-                              <span className="font-medium">{unit.airflowSpecs.fanSpecs.speed.low} RPM</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Bearing Type:</span>
-                            <span className="font-medium">{unit.airflowSpecs.fanSpecs.bearingType}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1870,83 +1424,32 @@ export default function EnhancedUnitCard({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Overall Sound Levels */}
                     <div className="border rounded-lg p-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Overall Sound Levels</h5>
+                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Sound Data</h5>
                       <div className="space-y-3 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Sound Level:</span>
-                          <span className="font-medium">{unit.soundLevel} dB(A)</span>
+                          <span className="text-muted-foreground">Operating Level:</span>
+                          <span className="font-medium">{unit.soundSpecs?.operatingLevel || unit.soundLevel} dB(A)</span>
                         </div>
-                        {unit.soundSpecs?.soundPower && (
-                          <>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Sound Power (Cooling):</span>
-                              <span className="font-medium">{unit.soundSpecs.soundPower.cooling} dB(A)</span>
-                            </div>
-                            {unit.soundSpecs.soundPower.heating && (
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sound Power (Heating):</span>
-                                <span className="font-medium">{unit.soundSpecs.soundPower.heating} dB(A)</span>
-                              </div>
-                            )}
-                          </>
+                        {unit.soundSpecs?.testStandard && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Test Standard:</span>
+                            <span className="font-medium">{unit.soundSpecs.testStandard}</span>
+                          </div>
                         )}
-                        {unit.soundSpecs?.soundPressure && (
+                        {unit.soundSpecs?.measurement && (
                           <>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Sound Pressure (Cooling):</span>
-                              <span className="font-medium">{unit.soundSpecs.soundPressure.cooling} dB(A) @ 10ft</span>
+                              <span className="text-muted-foreground">Measurement Distance:</span>
+                              <span className="font-medium">{unit.soundSpecs.measurement.distance}</span>
                             </div>
-                            {unit.soundSpecs.soundPressure.heating && (
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sound Pressure (Heating):</span>
-                                <span className="font-medium">{unit.soundSpecs.soundPressure.heating} dB(A) @ 10ft</span>
-                              </div>
-                            )}
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Test Conditions:</span>
+                              <span className="font-medium">{unit.soundSpecs.measurement.conditions}</span>
+                            </div>
                           </>
                         )}
                       </div>
                     </div>
-
-                    {/* Octave Band Analysis */}
-                    {unit.soundSpecs?.octaveBands && (
-                      <div className="border rounded-lg p-4">
-                        <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Octave Band Analysis (Cooling)</h5>
-                        <div className="grid grid-cols-4 gap-2 text-xs">
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">63 Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz63}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">125 Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz125}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">250 Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz250}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">500 Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz500}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">1K Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz1000}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">2K Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz2000}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">4K Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz4000}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-muted-foreground mb-1">8K Hz</div>
-                            <div className="font-semibold">{unit.soundSpecs.octaveBands.cooling.hz8000}</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1958,110 +1461,35 @@ export default function EnhancedUnitCard({
                   </h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Refrigerant & Charge */}
+                    {/* Refrigerant System */}
                     <div className="border rounded-lg p-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Refrigerant & Charge</h5>
+                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Refrigerant System</h5>
                       <div className="space-y-3 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Refrigerant Type:</span>
-                          <span className="font-medium">{unit.refrigerantSpecs?.type || unit.refrigerant}</span>
+                          <span className="font-medium">{unit.refrigerantSystem?.type || unit.refrigerant}</span>
                         </div>
-                        {unit.refrigerantSpecs?.charge && (
+                        {unit.refrigerantSystem?.charge && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Charge:</span>
+                            <span className="font-medium">{unit.refrigerantSystem.charge} lbs</span>
+                          </div>
+                        )}
+                        {unit.refrigerantSystem?.lineSetSize && (
                           <>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Factory Charge:</span>
-                              <span className="font-medium">{unit.refrigerantSpecs.charge.factory} lbs</span>
+                              <span className="text-muted-foreground">Liquid Line:</span>
+                              <span className="font-medium">{unit.refrigerantSystem.lineSetSize.liquid}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Field Charge:</span>
-                              <span className="font-medium">{unit.refrigerantSpecs.charge.field} lbs</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Total Charge:</span>
-                              <span className="font-medium">{unit.refrigerantSpecs.charge.total} lbs</span>
+                              <span className="text-muted-foreground">Suction Line:</span>
+                              <span className="font-medium">{unit.refrigerantSystem.lineSetSize.suction}</span>
                             </div>
                           </>
                         )}
                       </div>
                     </div>
-
-                    {/* Connection Sizes */}
-                    {unit.refrigerantSpecs?.connections && (
-                      <div className="border rounded-lg p-4">
-                        <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Connection Sizes</h5>
-                        <div className="space-y-3 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Liquid Line:</span>
-                            <span className="font-medium">{unit.refrigerantSpecs.connections.liquid.size} {unit.refrigerantSpecs.connections.liquid.type}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Suction Line:</span>
-                            <span className="font-medium">{unit.refrigerantSpecs.connections.suction.size} {unit.refrigerantSpecs.connections.suction.type}</span>
-                          </div>
-                          {unit.refrigerantSpecs.connections.hotGas && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Hot Gas:</span>
-                              <span className="font-medium">{unit.refrigerantSpecs.connections.hotGas.size} {unit.refrigerantSpecs.connections.hotGas.type}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Operating Pressures */}
-                  {unit.refrigerantSpecs?.operatingPressures && (
-                    <div className="border rounded-lg p-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Operating Pressures</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs mb-1">Low Side (Cooling)</div>
-                          <div className="font-semibold">{unit.refrigerantSpecs.operatingPressures.cooling.lowSide.min}-{unit.refrigerantSpecs.operatingPressures.cooling.lowSide.max} psig</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs mb-1">High Side (Cooling)</div>
-                          <div className="font-semibold">{unit.refrigerantSpecs.operatingPressures.cooling.highSide.min}-{unit.refrigerantSpecs.operatingPressures.cooling.highSide.max} psig</div>
-                        </div>
-                        {unit.refrigerantSpecs.operatingPressures.heating && (
-                          <>
-                            <div className="text-center">
-                              <div className="text-muted-foreground text-xs mb-1">Low Side (Heating)</div>
-                              <div className="font-semibold">{unit.refrigerantSpecs.operatingPressures.heating.lowSide.min}-{unit.refrigerantSpecs.operatingPressures.heating.lowSide.max} psig</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-muted-foreground text-xs mb-1">High Side (Heating)</div>
-                              <div className="font-semibold">{unit.refrigerantSpecs.operatingPressures.heating.highSide.min}-{unit.refrigerantSpecs.operatingPressures.heating.highSide.max} psig</div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* System Components */}
-                  {unit.refrigerantSpecs?.systemComponents && (
-                    <div className="border rounded-lg p-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">System Components</h5>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Expansion Device:</span>
-                          <span className="font-medium">{unit.refrigerantSpecs.systemComponents.expansionDevice}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Filter Drier:</span>
-                          <span className="font-medium">{unit.refrigerantSpecs.systemComponents.filterDrier}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Sight Glass:</span>
-                          <span className="font-medium">{unit.refrigerantSpecs.systemComponents.sightGlass ? 'Yes' : 'No'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Service Valves:</span>
-                          <span className="font-medium">{unit.refrigerantSpecs.systemComponents.serviceValves ? 'Yes' : 'No'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* System Features */}
@@ -2078,24 +1506,12 @@ export default function EnhancedUnitCard({
                       <div className="space-y-3 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Cooling Stages:</span>
-                          <span className="font-medium">{unit.systemFeatures?.capacity?.coolingStages || unit.coolingStages}</span>
+                          <span className="font-medium">{unit.coolingStages || 1}</span>
                         </div>
-                        {(unit.systemFeatures?.capacity?.heatingStages || unit.heatingStages) && (
+                        {unit.heatingStages && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Heating Stages:</span>
-                            <span className="font-medium">{unit.systemFeatures?.capacity?.heatingStages || unit.heatingStages}</span>
-                          </div>
-                        )}
-                        {unit.systemFeatures?.capacity?.modulation && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Variable Capacity:</span>
-                            <span className="font-medium">Yes</span>
-                          </div>
-                        )}
-                        {unit.systemFeatures?.capacity?.turndownRatio && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Turndown Ratio:</span>
-                            <span className="font-medium">{unit.systemFeatures.capacity.turndownRatio}:1</span>
+                            <span className="font-medium">{unit.heatingStages}</span>
                           </div>
                         )}
                         <div className="flex justify-between">
@@ -2111,58 +1527,11 @@ export default function EnhancedUnitCard({
                       <div className="space-y-3 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Controls Type:</span>
-                          <span className="font-medium">{unit.systemFeatures?.controls?.type || unit.controlsType}</span>
+                          <span className="font-medium">{unit.controlsType}</span>
                         </div>
-                        {unit.systemFeatures?.controls?.interface && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Interface:</span>
-                            <span className="font-medium">{unit.systemFeatures.controls.interface}</span>
-                          </div>
-                        )}
-                        {unit.systemFeatures?.controls?.communicationProtocols && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Communication:</span>
-                            <span className="font-medium">{unit.systemFeatures.controls.communicationProtocols.join(', ')}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
-
-                  {/* IAQ Features */}
-                  {unit.systemFeatures?.iaqFeatures && (
-                    <div className="border rounded-lg p-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Indoor Air Quality Features</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-muted-foreground">Standard Filtration:</span>
-                            <span className="font-medium">{unit.systemFeatures.iaqFeatures.filtration.standard}</span>
-                          </div>
-                          {unit.systemFeatures.iaqFeatures.filtration.optional.length > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Optional Filters:</span>
-                              <span className="font-medium">{unit.systemFeatures.iaqFeatures.filtration.optional.join(', ')}</span>
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-muted-foreground">Economizer:</span>
-                            <span className="font-medium">{unit.systemFeatures.iaqFeatures.ventilation.economizer ? 'Available' : 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-muted-foreground">Fresh Air Intake:</span>
-                            <span className="font-medium">{unit.systemFeatures.iaqFeatures.ventilation.freshAirIntake ? 'Yes' : 'No'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">ERV:</span>
-                            <span className="font-medium">{unit.systemFeatures.iaqFeatures.ventilation.erv ? 'Available' : 'N/A'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Operating Conditions */}
                   <div className="border rounded-lg p-4">
@@ -2172,16 +1541,14 @@ export default function EnhancedUnitCard({
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Cooling Range:</span>
                           <span className="font-medium">
-                            {unit.operatingConditions?.temperatureRange?.cooling?.min || unit.temperatureRange.cooling.min}°F to 
-                            {unit.operatingConditions?.temperatureRange?.cooling?.max || unit.temperatureRange.cooling.max}°F
+                            {unit.temperatureRange.cooling.min}°F to {unit.temperatureRange.cooling.max}°F
                           </span>
                         </div>
-                        {(unit.operatingConditions?.temperatureRange?.heating || unit.temperatureRange.heating) && (
+                        {unit.temperatureRange.heating && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Heating Range:</span>
                             <span className="font-medium">
-                              {unit.operatingConditions?.temperatureRange?.heating?.min || unit.temperatureRange.heating?.min}°F to 
-                              {unit.operatingConditions?.temperatureRange?.heating?.max || unit.temperatureRange.heating?.max}°F
+                              {unit.temperatureRange.heating.min}°F to {unit.temperatureRange.heating.max}°F
                             </span>
                           </div>
                         )}
@@ -2189,20 +1556,6 @@ export default function EnhancedUnitCard({
                           <span className="text-muted-foreground">Coil Type:</span>
                           <span className="font-medium">{unit.coilType}</span>
                         </div>
-                      </div>
-                      <div className="space-y-3">
-                        {unit.operatingConditions?.altitudeLimit && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Max Altitude:</span>
-                            <span className="font-medium">{unit.operatingConditions.altitudeLimit.toLocaleString()} ft</span>
-                          </div>
-                        )}
-                        {unit.operatingConditions?.humidityRange && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Humidity Range:</span>
-                            <span className="font-medium">{unit.operatingConditions.humidityRange.min}-{unit.operatingConditions.humidityRange.max}% RH</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>

@@ -953,3 +953,12 @@ export const exportBulkComparison = (
     includeNotesSection: options.includeNotesSection !== false
   });
 };
+
+// Export the specification report function
+export const exportSpecificationReport = (
+  replacements: DaikinReplacement[],
+  options: ExportOptions = {}
+): void => {
+  const pdfService = new PDFService();
+  pdfService.exportSpecificationReport(replacements, options);
+};

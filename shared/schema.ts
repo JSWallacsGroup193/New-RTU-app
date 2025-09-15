@@ -1630,3 +1630,158 @@ export type SubmitCorrectionRequest = z.infer<typeof submitCorrectionRequestSche
 export type SubmitMatchFeedbackRequest = z.infer<typeof submitMatchFeedbackRequestSchema>;
 export type LearningAnalyticsRequest = z.infer<typeof learningAnalyticsRequestSchema>;
 export type LearningAnalyticsResponse = z.infer<typeof learningAnalyticsResponseSchema>;
+
+// Enhanced unit interface with comprehensive technical specifications for UI components
+export interface EnhancedUnit {
+  id: string;
+  modelNumber: string;
+  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
+  btuCapacity: number;
+  tonnage: string;
+  voltage: string;
+  phases: string;
+  sizeMatch: "smaller" | "direct" | "larger";
+  
+  // FLAT PROPERTIES FOR BACKWARD COMPATIBILITY
+  seerRating: number;
+  eerRating?: number;
+  hspfRating?: number;
+  refrigerant: string;
+  driveType: string;
+  coolingStages?: number;
+  heatingStages?: number;
+  soundLevel: number;
+  dimensions: { length: number; width: number; height: number } | string;
+  weight: number;
+  operatingAmperage: number;
+  maxFuseSize: number;
+  temperatureRange: {
+    cooling: { min: number; max: number };
+    heating?: { min: number; max: number };
+  };
+  controlsType: string;
+  coilType: string;
+  factoryOptions: Array<{
+    category: string;
+    code: string;
+    description: string;
+    priceAdder?: number;
+    availability: "Standard" | "Optional" | "N/A";
+  }>;
+  
+  // NESTED PERFORMANCE RATINGS STRUCTURE
+  performanceRatings: {
+    seerRating: number;
+    seer2Rating?: number;
+    eerRating?: number;
+    eer2Rating?: number;
+    hspfRating?: number;
+    hspf2Rating?: number;
+    ieerRating?: number;
+    iplvRating?: number;
+    copRating?: number;
+    partLoadEfficiency?: {
+      at25Percent: number;
+      at50Percent: number;
+      at75Percent: number;
+      at100Percent: number;
+    };
+    capacityRetention?: {
+      at5F: number;
+      at17F: number;
+    };
+  };
+  
+  // NESTED PHYSICAL SPECIFICATIONS STRUCTURE
+  physicalSpecs: {
+    dimensions: {
+      length: number;
+      width: number;
+      height: number;
+    };
+    weight: {
+      operating: number;
+      shipping: number;
+    };
+    clearances: {
+      sides: number;
+      back: number;
+      front: number;
+      top: number;
+    };
+    serviceAccess: {
+      controlPanel: string;
+      refrigerantConnections: string;
+      electricalConnections: string;
+    };
+    footprint: {
+      area: number;
+      foundation: string;
+    };
+  };
+  
+  // NESTED ELECTRICAL SPECIFICATIONS STRUCTURE  
+  electricalSpecs: {
+    operatingAmperage: {
+      cooling: {
+        rla: number;
+        mca: number;
+        lra: number;
+      };
+      heating?: {
+        rla: number;
+        mca: number;
+        lra: number;
+      };
+      fan: {
+        fla: number;
+      };
+    };
+    protection: {
+      maxFuseSize: number;
+      maxBreaker: number;
+    };
+  };
+  
+  // NESTED AIRFLOW SPECIFICATIONS STRUCTURE
+  airflowSpecs: {
+    nominalCfm: number;
+    availableEsp: number;
+    fanType: string;
+  };
+  
+  // NESTED SOUND SPECIFICATIONS STRUCTURE
+  soundSpecs: {
+    operatingLevel: number;
+    testStandard: string;
+    measurement: {
+      distance: string;
+      conditions: string;
+    };
+  };
+  
+  // NESTED REFRIGERANT SYSTEM STRUCTURE
+  refrigerantSystem: {
+    type: string;
+    charge: number;
+    lineSetSize: {
+      liquid: string;
+      suction: string;
+    };
+  };
+  
+  // FEATURES STRUCTURE
+  features: {
+    standard: string[];
+    optional: string[];
+  };
+  
+  // FIELD ACCESSORIES
+  fieldAccessories: Array<{
+    category: string;
+    code: string;
+    description: string;
+    complexity: "Easy" | "Moderate" | "Professional Required";
+    compatible: boolean;
+  }>;
+}
