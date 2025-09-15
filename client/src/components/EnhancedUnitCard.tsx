@@ -118,16 +118,20 @@ export default function EnhancedUnitCard({
   const [activeTab, setActiveTab] = useState("performance");
   const [isEditMode, setIsEditMode] = useState(false);
   
-  // Nomenclature builder state
+  // Enhanced nomenclature builder state
   const [nomenclatureSegments, setNomenclatureSegments] = useState<Array<{
     position: string;
     code: string;
     description: string;
     options: Array<{ value: string; description: string; }>;
     selectedValue: string;
+    isValid?: boolean;
+    validationMessage?: string;
   }>>([]);
   const [dynamicModelNumber, setDynamicModelNumber] = useState(unit.modelNumber);
   const [modelBuildError, setModelBuildError] = useState<string | null>(null);
+  const [modelBuildSuccess, setModelBuildSuccess] = useState<boolean>(false);
+  const [lastValidModel, setLastValidModel] = useState<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   
   const modelBuilder = useRealTimeModelBuilder();
@@ -643,24 +647,101 @@ export default function EnhancedUnitCard({
         cleanupRef.current();
       }
       
-      // Use the real-time model builder with proper cleanup
+      // Use the real-time model builder with enhanced feedback
       cleanupRef.current = modelBuilder.buildModel(buildRequest, (response) => {
         if (response && response.success && response.result) {
           const newModelNumber = response.result.model;
           setDynamicModelNumber(newModelNumber);
+          setLastValidModel(newModelNumber);
+          setModelBuildSuccess(true);
+          setModelBuildError(null);
+          
+          // Validate segments based on successful build
+          const validatedSegments = validateNomenclatureSegments(updatedSegments, response.result);
+          setNomenclatureSegments(validatedSegments);
           
           // Trigger specification update callback if provided
           if (onSpecificationUpdate) {
             onSpecificationUpdate(newModelNumber, response.result.specifications);
           }
         } else {
+          setModelBuildSuccess(false);
           // Fallback to manual concatenation for all 24 positions
           const fallbackModel = buildManualModelNumber(updatedSegments);
           setDynamicModelNumber(fallbackModel);
-          setModelBuildError(response?.errors?.[0] || "Model built with fallback method");
+          
+          // Provide more descriptive error messaging
+          const errorMessage = response?.errors?.[0] || "Model configuration may be invalid";
+          setModelBuildError(`${errorMessage}. Using fallback model: ${fallbackModel}`);
+          
+          // Mark segments with potential issues
+          const segmentsWithErrors = markInvalidSegments(updatedSegments, response?.errors);
+          setNomenclatureSegments(segmentsWithErrors);
         }
       });
     }
+  };
+
+  // Enhanced validation for nomenclature segments
+  const validateNomenclatureSegments = (segments: typeof nomenclatureSegments, buildResult?: any) => {
+    return segments.map((segment, index) => {
+      let isValid = true;
+      let validationMessage = "";
+
+      // Validate based on position and dependencies
+      switch (index) {
+        case 2: // System Type
+          isValid = ["C", "G", "H"].includes(segment.selectedValue);
+          if (!isValid) validationMessage = "Invalid system type selected";
+          break;
+        case 3: // Capacity
+          isValid = /^\d{3}$/.test(segment.selectedValue);
+          if (!isValid) validationMessage = "Capacity must be 3 digits";
+          break;
+        case 4: // Voltage
+          isValid = ["1", "3", "4", "7"].includes(segment.selectedValue);
+          if (!isValid) validationMessage = "Invalid voltage/phase code";
+          break;
+        case 6: // Heat Field - validate based on system type
+          const systemType = segments[2]?.selectedValue;
+          if (systemType === "G" && segment.selectedValue === "XXX") {
+            isValid = false;
+            validationMessage = "Gas/Electric systems require heat specification";
+          } else if (systemType === "C" && segment.selectedValue !== "XXX") {
+            isValid = false;
+            validationMessage = "Straight A/C systems should not have heat";
+          }
+          break;
+        default:
+          isValid = segment.selectedValue !== "";
+      }
+
+      return {
+        ...segment,
+        isValid,
+        validationMessage: isValid ? "" : validationMessage
+      };
+    });
+  };
+
+  // Mark segments with validation errors
+  const markInvalidSegments = (segments: typeof nomenclatureSegments, errors?: string[]) => {
+    return segments.map((segment, index) => {
+      // Basic validation for common issues
+      let isValid = true;
+      let validationMessage = "";
+
+      if (!segment.selectedValue || segment.selectedValue === "") {
+        isValid = false;
+        validationMessage = "Value required";
+      }
+
+      return {
+        ...segment,
+        isValid,
+        validationMessage
+      };
+    });
   };
 
   // Build complete 24-character model number from segments
@@ -982,40 +1063,98 @@ export default function EnhancedUnitCard({
                     Model Number Builder
                   </h4>
                   
-                  {/* Dynamic Model Number Display */}
-                  <div className="bg-muted/50 p-3 rounded-md mb-4">
+                  {/* Enhanced Dynamic Model Number Display */}
+                  <div className={`p-4 rounded-lg mb-4 border transition-all duration-300 ${
+                    modelBuildSuccess 
+                      ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" 
+                      : modelBuildError 
+                      ? "bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800"
+                      : "bg-muted/50 border-muted-foreground/20"
+                  }`}>
                     <div className="text-center">
-                      <p className="text-xs text-muted-foreground mb-1">Current Model Number</p>
-                      <div className="flex items-center justify-center gap-2">
-                        {modelBuilder.isBuilding && (
-                          <Loader2 className="h-4 w-4 animate-spin text-primary" data-testid="loader-model-building" />
-                        )}
-                        <p className="text-lg font-mono font-bold text-primary" data-testid="text-dynamic-model-number">
-                          {dynamicModelNumber}
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <div className={`h-2 w-2 rounded-full ${
+                          modelBuildSuccess 
+                            ? "bg-green-500" 
+                            : modelBuildError 
+                            ? "bg-orange-500"
+                            : "bg-blue-500"
+                        }`} />
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          {modelBuildSuccess 
+                            ? "Model Number (Validated)" 
+                            : modelBuildError 
+                            ? "Model Number (Warning)"
+                            : "Current Model Number"}
                         </p>
                       </div>
+                      <div className="flex items-center justify-center gap-3">
+                        {modelBuilder.isBuilding && (
+                          <Loader2 className="h-5 w-5 animate-spin text-blue-500" data-testid="loader-model-building" />
+                        )}
+                        <p className="text-xl font-mono font-bold tracking-wider text-foreground" data-testid="text-dynamic-model-number">
+                          {dynamicModelNumber}
+                        </p>
+                        {modelBuildSuccess && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white rounded-md text-xs font-medium">
+                            <Settings className="h-3 w-3" />
+                            <span>Valid</span>
+                          </div>
+                        )}
+                      </div>
                       {modelBuildError && (
-                        <div className="flex items-center justify-center gap-1 mt-2">
-                          <AlertCircle className="h-3 w-3 text-orange-500" />
-                          <p className="text-xs text-orange-600" data-testid="text-model-build-error">
+                        <div className="flex items-center justify-center gap-2 mt-3 p-2 bg-orange-100 dark:bg-orange-900 rounded-md">
+                          <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                          <p className="text-sm text-orange-700 dark:text-orange-300" data-testid="text-model-build-error">
                             {modelBuildError}
+                          </p>
+                        </div>
+                      )}
+                      {lastValidModel && lastValidModel !== dynamicModelNumber && (
+                        <div className="flex items-center justify-center gap-2 mt-2">
+                          <p className="text-xs text-muted-foreground">
+                            Last Valid: <span className="font-mono font-semibold">{lastValidModel}</span>
                           </p>
                         </div>
                       )}
                     </div>
                   </div>
                   
-                  {/* Interactive Nomenclature Segments */}
-                  <div className="space-y-4">
+                  {/* Enhanced Interactive Nomenclature Segments */}
+                  <div className="space-y-3">
                     {nomenclatureSegments.map((segment, index) => (
-                      <div key={segment.position} className="border rounded-md p-3">
+                      <div 
+                        key={segment.position} 
+                        className={`border rounded-lg p-4 transition-all duration-200 hover-elevate ${
+                          segment.isValid === false 
+                            ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950" 
+                            : segment.isValid === true 
+                            ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950"
+                            : "border-muted-foreground/20 bg-card"
+                        }`}
+                      >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="outline" className="text-xs">
+                            <div className="flex items-center gap-3 mb-3">
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs font-mono ${
+                                  segment.isValid === false 
+                                    ? "border-red-400 text-red-700 dark:text-red-400" 
+                                    : segment.isValid === true 
+                                    ? "border-green-400 text-green-700 dark:text-green-400"
+                                    : ""
+                                }`}
+                              >
                                 {segment.position}
                               </Badge>
-                              <span className="text-sm font-medium">{segment.description}</span>
+                              <span className="text-sm font-semibold text-foreground">{segment.description}</span>
+                              {segment.isValid === true && (
+                                <div className="h-2 w-2 bg-green-500 rounded-full" />
+                              )}
+                              {segment.isValid === false && (
+                                <AlertCircle className="h-4 w-4 text-red-500" />
+                              )}
                             </div>
                             <Select 
                               value={segment.selectedValue} 
@@ -1023,7 +1162,13 @@ export default function EnhancedUnitCard({
                               data-testid={`select-segment-${index}`}
                               disabled={modelBuilder.isBuilding}
                             >
-                              <SelectTrigger className="w-full">
+                              <SelectTrigger className={`w-full transition-colors ${
+                                segment.isValid === false 
+                                  ? "border-red-400 focus:border-red-500" 
+                                  : segment.isValid === true 
+                                  ? "border-green-400 focus:border-green-500"
+                                  : ""
+                              }`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1033,48 +1178,90 @@ export default function EnhancedUnitCard({
                                     value={option.value}
                                     data-testid={`option-${segment.position.toLowerCase().replace(/\s+/g, '-')}-${option.value}`}
                                   >
-                                    <div>
-                                      <span className="font-medium">{option.value}</span>
-                                      <span className="text-muted-foreground ml-2">- {option.description}</span>
+                                    <div className="flex items-center justify-between w-full">
+                                      <div>
+                                        <span className="font-semibold text-foreground">{option.value}</span>
+                                        <span className="text-muted-foreground ml-2">- {option.description}</span>
+                                      </div>
                                     </div>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
+                            {segment.validationMessage && (
+                              <div className="flex items-center gap-1 mt-2">
+                                <AlertCircle className="h-3 w-3 text-red-500" />
+                                <p className="text-xs text-red-600 dark:text-red-400">
+                                  {segment.validationMessage}
+                                </p>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right">
-                            <span className="text-lg font-mono font-bold text-primary">
+                          <div className="text-right flex flex-col items-end">
+                            <span className={`text-xl font-mono font-bold tracking-wider ${
+                              segment.isValid === false 
+                                ? "text-red-600 dark:text-red-400" 
+                                : segment.isValid === true 
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-primary"
+                            }`}>
                               {segment.selectedValue}
                             </span>
+                            {segment.isValid === true && (
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium mt-1">Valid</span>
+                            )}
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                   
-                  {/* Model Building Status */}
-                  {(modelBuilder.isBuilding || modelBuildError) && (
-                    <div className="mt-4 p-2 rounded-md border">
+                  {/* Enhanced Model Building Status */}
+                  {(modelBuilder.isBuilding || modelBuildError || modelBuildSuccess) && (
+                    <div className={`mt-4 p-4 rounded-lg border transition-all duration-300 ${
+                      modelBuildSuccess 
+                        ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800" 
+                        : modelBuildError 
+                        ? "bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800"
+                        : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
+                    }`}>
                       {modelBuilder.isBuilding && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>Building model number...</span>
+                        <div className="flex items-center gap-3 text-sm">
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                          <div>
+                            <p className="font-medium text-blue-700 dark:text-blue-300">Building Model Number</p>
+                            <p className="text-blue-600 dark:text-blue-400 text-xs">Validating configuration...</p>
+                          </div>
+                        </div>
+                      )}
+                      {modelBuildSuccess && !modelBuilder.isBuilding && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <div className="h-4 w-4 bg-green-600 rounded-full flex items-center justify-center">
+                            <Settings className="h-2 w-2 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-green-700 dark:text-green-300">Model Number Validated</p>
+                            <p className="text-green-600 dark:text-green-400 text-xs">Configuration is valid and buildable</p>
+                          </div>
                         </div>
                       )}
                       {modelBuildError && !modelBuilder.isBuilding && (
-                        <div className="flex items-center gap-2 text-sm text-orange-600">
-                          <AlertCircle className="h-3 w-3" />
-                          <span>{modelBuildError}</span>
+                        <div className="flex items-start gap-3 text-sm">
+                          <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="font-medium text-orange-700 dark:text-orange-300">Configuration Issue</p>
+                            <p className="text-orange-600 dark:text-orange-400 text-xs leading-relaxed">{modelBuildError}</p>
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
                   
-                  {/* Model Building Actions */}
+                  {/* Enhanced Model Building Actions */}
                   {isEditable && (
-                    <div className="flex gap-2 mt-4">
+                    <div className="flex flex-wrap gap-3 mt-6">
                       <Button 
-                        variant="outline" 
+                        variant={modelBuildSuccess ? "default" : "outline"}
                         size="sm"
                         onClick={() => {
                           if (onSpecificationUpdate) {
@@ -1082,10 +1269,11 @@ export default function EnhancedUnitCard({
                           }
                         }}
                         data-testid="button-apply-model-changes"
-                        disabled={modelBuilder.isBuilding}
+                        disabled={modelBuilder.isBuilding || !modelBuildSuccess}
+                        className={modelBuildSuccess ? "bg-green-600 hover:bg-green-700 text-white" : ""}
                       >
-                        <Settings className="h-3 w-3 mr-1" />
-                        Apply Changes
+                        <Settings className="h-3 w-3 mr-2" />
+                        {modelBuildSuccess ? "Apply Valid Model" : "Apply Changes"}
                       </Button>
                       <Button 
                         variant="ghost" 
@@ -1094,12 +1282,31 @@ export default function EnhancedUnitCard({
                           setNomenclatureSegments(getNomenclatureBreakdown(unit.modelNumber));
                           setDynamicModelNumber(unit.modelNumber);
                           setModelBuildError(null);
+                          setModelBuildSuccess(false);
+                          setLastValidModel(null);
                         }}
                         data-testid="button-reset-model"
                         disabled={modelBuilder.isBuilding}
                       >
-                        Reset
+                        <AlertCircle className="h-3 w-3 mr-2" />
+                        Reset to Original
                       </Button>
+                      {lastValidModel && lastValidModel !== unit.modelNumber && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setDynamicModelNumber(lastValidModel);
+                            setModelBuildSuccess(true);
+                            setModelBuildError(null);
+                          }}
+                          data-testid="button-restore-last-valid"
+                          disabled={modelBuilder.isBuilding}
+                        >
+                          <Info className="h-3 w-3 mr-2" />
+                          Restore Last Valid
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

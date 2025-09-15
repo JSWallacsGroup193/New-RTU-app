@@ -40,8 +40,8 @@ interface SpecificationCardProps {
   enableLearning?: boolean;
   sessionId?: string;
   originalModelNumber?: string;
-  originalParsedData?: ParsedModelData;
-  suggestedMatches?: ModelSpecification[];
+  originalParsedData?: ParsedModel;
+  suggestedMatches?: Specification[];
   showLearningFeedback?: boolean;
 }
 

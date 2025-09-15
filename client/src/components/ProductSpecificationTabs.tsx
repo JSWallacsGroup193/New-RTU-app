@@ -132,49 +132,108 @@ export default function ProductSpecificationTabs({
     enabled: !!modelNumber
   });
   
-  // Nomenclature breakdown for Daikin model numbers
+  // Enhanced nomenclature breakdown for Daikin model numbers (24 positions)
   const getNomenclatureBreakdown = (model: string): NomenclatureSegment[] => {
     if (!model) return [];
     
-    // Example: DSC036D3 = D-S-C-036-D-3
-    return [
+    // Determine system type for conditional logic
+    const systemTypeCode = model.charAt(2) || "C";
+    const efficiencyCode = model.charAt(1) || "S";
+    const isGasElectric = systemTypeCode === "G";
+    const isHeatPump = systemTypeCode === "H";
+    const isStraightAC = systemTypeCode === "C";
+    
+    // Pad model to ensure consistent length for analysis
+    const paddedModel = model.padEnd(24, 'X');
+    
+    const segments: NomenclatureSegment[] = [
       {
         position: "Position 1",
-        code: model.charAt(0) || "D",
-        description: "Manufacturer - Daikin",
+        code: paddedModel.charAt(0) || "D",
+        description: "Manufacturer",
         example: "D = Daikin"
       },
       {
         position: "Position 2", 
-        code: model.charAt(1) || "S",
+        code: paddedModel.charAt(1) || "S",
         description: "Efficiency Level",
         example: "S = Standard, H = High Efficiency"
       },
       {
         position: "Position 3",
-        code: model.charAt(2) || "C", 
+        code: paddedModel.charAt(2) || "C", 
         description: "System Type",
         example: "C = Straight A/C, G = Gas/Electric, H = Heat Pump"
       },
       {
         position: "Position 4-6",
-        code: model.substring(3, 6) || "036",
+        code: paddedModel.substring(3, 6) || "036",
         description: "Nominal Capacity (MBH)",
-        example: "036 = 36,000 BTU/h (3 Ton)"
+        example: "036 = 36,000 BTU/h (3 Ton), 048 = 48,000 BTU/h (4 Ton)"
       },
       {
         position: "Position 7",
-        code: model.charAt(6) || "D",
-        description: "Fan/Drive Type", 
-        example: "D = Direct Drive, L = Medium Static, W = High Static"
+        code: paddedModel.charAt(6) || "3",
+        description: "Voltage/Phase",
+        example: "1 = 208/230V 1φ, 3 = 208/230V 3φ, 4 = 460V 3φ, 7 = 575V 3φ"
       },
       {
         position: "Position 8",
-        code: model.charAt(7) || "3",
-        description: "Voltage/Phase",
-        example: "1 = 208/230V 1φ, 3 = 208/230V 3φ, 4 = 460V 3φ, 7 = 575V 3φ"
+        code: paddedModel.charAt(7) || "D",
+        description: "Fan/Drive Type", 
+        example: "D = Direct Drive - Standard, L = Medium Static, W = High Static"
+      },
+      {
+        position: "Position 9-11",
+        code: paddedModel.substring(8, 11) || (isGasElectric ? "100" : isHeatPump ? "010" : "XXX"),
+        description: isGasElectric ? "Gas Heat (MBH)" : isHeatPump ? "Electric Heat (kW)" : "Heat Field",
+        example: isGasElectric ? "100 = 100,000 BTU/h Gas Heat" : isHeatPump ? "010 = 10 kW Electric Heat" : "XXX = No Heat (Straight A/C)"
+      },
+      {
+        position: "Position 12",
+        code: paddedModel.charAt(11) || "A",
+        description: "Controls Type",
+        example: "A = Electromechanical, B = DDC/BACnet (Std), C = DDC/BACnet (High-eff)"
+      },
+      {
+        position: "Position 13",
+        code: paddedModel.charAt(12) || "A",
+        description: "Refrigeration System",
+        example: "A = Single Stage, C = Two Stage, F = Two Stage + HGRH + Low Ambient"
+      },
+      {
+        position: "Position 14",
+        code: paddedModel.charAt(13) || "X",
+        description: "Heat Exchanger",
+        example: isGasElectric ? "A = Aluminized Steel, S = Stainless Steel, U = Ultra Low NOx" : "X = N/A (Non-gas unit)"
       }
     ];
+    
+    // Add factory options positions (15-17) if model is long enough
+    if (model.length >= 15) {
+      segments.push(
+        {
+          position: "Position 15",
+          code: paddedModel.charAt(14) || "X",
+          description: "Factory Option 1",
+          example: "X = No option, H = Electric Heat Kit, D = Disconnect Switch"
+        },
+        {
+          position: "Position 16",
+          code: paddedModel.charAt(15) || "X",
+          description: "Factory Option 2",
+          example: "X = No option, B = Building Automation, N = BACnet/IP Interface"
+        },
+        {
+          position: "Position 17",
+          code: paddedModel.charAt(16) || "X",
+          description: "Factory Option 3",
+          example: "X = No option, L = Low-Loss Fitting, S = Sight Glass & Filter"
+        }
+      );
+    }
+    
+    return segments;
   };
 
   const nomenclatureSegments = getNomenclatureBreakdown(modelNumber);
