@@ -16,9 +16,7 @@ export default function Header() {
               <Zap className="h-6 w-6 text-primary" />
               <span className="text-xl font-bold text-primary">HVAC Decoder</span>
             </div>
-            <Badge variant="secondary" className="text-xs">
-              Universal
-            </Badge>
+            <Badge variant="secondary" className="text-xs">The Wallace Group</Badge>
           </div>
           
           <nav className="hidden md:flex items-center gap-4">
