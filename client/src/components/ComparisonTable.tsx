@@ -18,44 +18,7 @@ import {
   ArrowDown,
   Equal
 } from "lucide-react";
-
-interface OriginalUnit {
-  modelNumber: string;
-  manufacturer: string;
-  confidence?: number;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  voltage: string;
-  phases: string;
-  specifications: Array<{
-    label: string;
-    value: string;
-    unit?: string;
-  }>;
-}
-
-interface DaikinReplacement {
-  id: string;
-  modelNumber: string;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  voltage: string;
-  phases: string;
-  specifications: Array<{
-    label: string;
-    value: string;
-    unit?: string;
-  }>;
-  sizeMatch: "smaller" | "direct" | "larger";
-  seerRating?: number;
-  eerRating?: number;
-  hspfRating?: number;
-  refrigerant?: string;
-  driveType?: string;
-  soundLevel?: number;
-  dimensions?: { length: number; width: number; height: number };
-  weight?: number;
-}
+import { type OriginalUnit, type DaikinReplacement } from "@shared/schema";
 
 interface ComparisonTableProps {
   originalUnit: OriginalUnit;

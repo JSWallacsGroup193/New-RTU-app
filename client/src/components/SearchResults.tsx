@@ -17,36 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { exportSingleComparison, exportBulkComparison } from "@/lib/pdfService";
 import { RefreshCw, AlertCircle, Download, FileText, GitCompare, List, FolderPlus, Save, Plus } from "lucide-react";
-
-interface OriginalUnit {
-  modelNumber: string;
-  manufacturer: string;
-  confidence: number;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  voltage: string;
-  phases: string;
-  specifications: Array<{
-    label: string;
-    value: string;
-    unit?: string;
-  }>;
-}
-
-interface DaikinReplacement {
-  id: string;
-  modelNumber: string;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  voltage: string;
-  phases: string;
-  specifications: Array<{
-    label: string;
-    value: string;
-    unit?: string;
-  }>;
-  sizeMatch: "smaller" | "direct" | "larger";
-}
+import { type OriginalUnit, type DaikinReplacement } from "@shared/schema";
 
 interface SearchResultsProps {
   originalUnit: OriginalUnit;

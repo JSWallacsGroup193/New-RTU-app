@@ -4,21 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import SpecificationCard from "./SpecificationCard";
 import { ArrowDown, ArrowUp, Equal, ExternalLink, Download, CheckSquare, Square, Zap, Leaf } from "lucide-react";
-
-interface DaikinReplacement {
-  id: string;
-  modelNumber: string;
-  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
-  btuCapacity: number;
-  voltage: string;
-  phases: string;
-  specifications: Array<{
-    label: string;
-    value: string;
-    unit?: string;
-  }>;
-  sizeMatch: "smaller" | "direct" | "larger";
-}
+import { type DaikinReplacement } from "@shared/schema";
 
 interface ReplacementGridProps {
   replacements: DaikinReplacement[];
@@ -155,8 +141,8 @@ export default function ReplacementGrid({
                                   )}
                                 </div>
                                 <p className="text-sm text-muted-foreground">
-                                  {replacement.systemType === "Gas/Electric" && (replacement as any).heatingBTU && Number((replacement as any).heatingBTU) > 0 ? 
-                                    `${Number(replacement.btuCapacity).toLocaleString()} Cooling / ${Number((replacement as any).heatingBTU).toLocaleString()} Heating BTU/hr` : 
+                                  {replacement.systemType === "Gas/Electric" && replacement.heatingBTU && Number(replacement.heatingBTU) > 0 ? 
+                                    `${Number(replacement.btuCapacity).toLocaleString()} Cooling / ${Number(replacement.heatingBTU).toLocaleString()} Heating BTU/hr` : 
                                     `${Number(replacement.btuCapacity).toLocaleString()} BTU/hr Cooling`
                                   } • {replacement.voltage}V
                                 </p>

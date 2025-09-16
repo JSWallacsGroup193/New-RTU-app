@@ -172,6 +172,51 @@ export type HvacUnit = typeof hvacUnits.$inferSelect;
 
 // Parsed model information
 // ============================================================================
+// HVAC UNIT TYPES FOR FRONTEND COMPONENTS
+// ============================================================================
+
+// Original unit (from manufacturer model number parsing)
+export interface OriginalUnit {
+  modelNumber: string;
+  manufacturer: string;
+  confidence?: number;
+  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
+  btuCapacity: number;
+  voltage: string;
+  phases: string;
+  specifications: Array<{
+    label: string;
+    value: string;
+    unit?: string;
+  }>;
+}
+
+// Daikin replacement unit for comparison tables and grids
+export interface DaikinReplacement {
+  id: string;
+  modelNumber: string;
+  systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C";
+  btuCapacity: number;
+  voltage: string;
+  phases: string;
+  specifications: Array<{
+    label: string;
+    value: string;
+    unit?: string;
+  }>;
+  sizeMatch: "smaller" | "direct" | "larger";
+  seerRating?: number;
+  eerRating?: number;
+  hspfRating?: number;
+  refrigerant?: string;
+  driveType?: string;
+  soundLevel?: number;
+  dimensions?: { length: number; width: number; height: number };
+  weight?: number;
+  heatingBTU?: number | string; // For Gas/Electric systems
+}
+
+// ============================================================================
 // COMPREHENSIVE DAIKIN PRODUCT SPECIFICATIONS
 // ============================================================================
 
