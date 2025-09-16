@@ -27,17 +27,17 @@ export default function ReplacementGrid({
     smaller: {
       icon: ArrowDown,
       label: "Size Smaller",
-      color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+      color: "bg-accent/60 text-accent-foreground border border-accent"
     },
     direct: {
       icon: Equal,
       label: "Direct Match",
-      color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      color: "bg-primary/10 text-primary border border-primary/20"
     },
     larger: {
       icon: ArrowUp,
       label: "Size Larger", 
-      color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+      color: "bg-accent/60 text-accent-foreground border border-accent"
     }
   };
 
@@ -54,9 +54,9 @@ export default function ReplacementGrid({
     if (!seerRating) return null;
     
     if (seerRating >= 16) {
-      return { level: "High", color: "bg-blue-500 text-white", icon: Zap };
+      return { level: "High", color: "bg-primary text-primary-foreground", icon: Zap };
     } else if (seerRating >= 13) {
-      return { level: "Standard", color: "bg-gray-500 text-white", icon: Leaf };
+      return { level: "Standard", color: "bg-secondary text-secondary-foreground", icon: Leaf };
     }
     return null;
   };
@@ -72,7 +72,7 @@ export default function ReplacementGrid({
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <h2 className="text-2xl font-semibold text-primary">Daikin Replacements</h2>
+        <h2 className="text-xl font-semibold text-foreground">Daikin Replacements</h2>
         <Badge variant="outline" className="text-primary">
           {replacements.length} Options Available
         </Badge>

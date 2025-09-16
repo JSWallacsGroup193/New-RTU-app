@@ -40,14 +40,14 @@ export default function ModelInputForm({ onSearch, isLoading = false }: ModelInp
 
   return (
     <TooltipProvider>
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl">
-            <Zap className="h-6 w-6 text-primary" />
-            HVAC Universal Decoder
+      <Card className="w-full max-w-2xl border-border">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-xl font-medium">
+            <Zap className="h-5 w-5 text-primary" />
+            Model Number Search
           </CardTitle>
-          <p className="text-muted-foreground">
-            Enter any manufacturer's model number to find Daikin replacements with efficiency preferences
+          <p className="text-sm text-muted-foreground">
+            Enter any manufacturer model number to find Daikin replacements
           </p>
         </CardHeader>
         <CardContent>
