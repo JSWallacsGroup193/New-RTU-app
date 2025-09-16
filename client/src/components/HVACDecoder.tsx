@@ -104,12 +104,14 @@ export default function HVACDecoder() {
   return (
     <div className="min-h-screen bg-background">
       {appState === "search" ? (
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-4xl mx-auto space-y-8">
+        <div className="container mx-auto px-6 py-8">
+          <div className="max-w-4xl mx-auto space-y-6">
             {/* Hero Section */}
-            <div className="text-center space-y-4">
-              <h1 className="text-4xl font-bold text-primary">Package Unit System Selector</h1>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto text-left">The Package Unit System Selector is a specialized AI-powered HVAC matching system designed for professionals who need to replace package HVAC units. It supports model number parsing from any manufacturer and provides precise Daikin R32 replacements. The tool ensures all matches conform to Daikin's family, series, and configuration rules, and supports real-time editing, comparison, export, and learning features.</p>
+            <div className="text-center space-y-3">
+              <h1 className="text-3xl font-semibold text-foreground">HVAC Universal Decoder</h1>
+              <p className="text-base text-muted-foreground max-w-xl mx-auto">
+                Decode any manufacturer model number and find precise Daikin R-32 package unit replacements
+              </p>
             </div>
 
             {/* Main Search Form */}
@@ -118,98 +120,54 @@ export default function HVACDecoder() {
             </div>
 
             {/* Alternative Options */}
-            <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-              <Card className="hover-elevate cursor-pointer" onClick={handleSpecSearch}>
-                <CardContent className="p-6 text-center space-y-3">
-                  <Database className="h-8 w-8 text-primary mx-auto" />
-                  <h3 className="text-lg font-semibold">Search by Specifications</h3>
+            <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+              <Card className="hover-elevate cursor-pointer border-border" onClick={handleSpecSearch}>
+                <CardContent className="p-4 text-center space-y-2">
+                  <Database className="h-6 w-6 text-primary mx-auto" />
+                  <h3 className="text-base font-medium">Specification Search</h3>
                   <p className="text-sm text-muted-foreground">
-                    Find Daikin units by BTU capacity, voltage, and system type
+                    Search by BTU, voltage, and system type
                   </p>
                   <Button 
                     variant="outline" 
+                    size="sm"
                     className="w-full"
                     data-testid="button-spec-search"
                   >
                     <Search className="h-4 w-4 mr-2" />
-                    Spec Search
+                    Search by Specs
                   </Button>
                 </CardContent>
               </Card>
 
-              <Card className="hover-elevate cursor-pointer" onClick={handleDataPlateUpload}>
-                <CardContent className="p-6 text-center space-y-3">
-                  <Camera className="h-8 w-8 text-primary mx-auto" />
-                  <h3 className="text-lg font-semibold">Upload Data Plate</h3>
+              <Card className="hover-elevate cursor-pointer border-border" onClick={handleDataPlateUpload}>
+                <CardContent className="p-4 text-center space-y-2">
+                  <Camera className="h-6 w-6 text-primary mx-auto" />
+                  <h3 className="text-base font-medium">Data Plate Upload</h3>
                   <p className="text-sm text-muted-foreground">
-                    Take a photo of equipment nameplate for automatic extraction
+                    Upload nameplate photo for extraction
                   </p>
                   <Button 
                     variant="outline" 
+                    size="sm"
                     className="w-full"
                     data-testid="button-data-plate"
                   >
                     <Camera className="h-4 w-4 mr-2" />
-                    Data Plate
+                    Upload Photo
                   </Button>
                 </CardContent>
               </Card>
             </div>
 
             {/* Universal Manufacturer Support */}
-            <div className="text-center space-y-4">
-              <h3 className="text-lg font-semibold text-muted-foreground">Universal HVAC Decoder</h3>
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium text-foreground">
-                  🎯 Supports <span className="text-primary font-bold">ALL Major HVAC Manufacturers</span> (26+ Brands)
+            <div className="text-center">
+              <div className="bg-muted/30 border border-border rounded-lg p-4 max-w-2xl mx-auto">
+                <p className="text-sm font-medium text-foreground mb-2">
+                  Universal Compatibility
                 </p>
-                <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
-                  <span>Carrier</span>
-                  <span>•</span>
-                  <span>Trane</span>
-                  <span>•</span>
-                  <span>American Standard</span>
-                  <span>•</span>
-                  <span>York</span>
-                  <span>•</span>
-                  <span>Lennox</span>
-                  <span>•</span>
-                  <span>Goodman</span>
-                  <span>•</span>
-                  <span>Rheem</span>
-                  <span>•</span>
-                  <span>Bryant</span>
-                  <span>•</span>
-                  <span>Payne</span>
-                  <span>•</span>
-                  <span>Ruud</span>
-                  <span>•</span>
-                  <span>Amana</span>
-                  <span>•</span>
-                  <span>Tempstar</span>
-                  <span>•</span>
-                  <span>Heil</span>
-                  <span>•</span>
-                  <span>Comfortmaker</span>
-                  <span>•</span>
-                  <span>ICP Brands</span>
-                  <span>•</span>
-                  <span>Nordyne</span>
-                  <span>•</span>
-                  <span>Frigidaire</span>
-                  <span>•</span>
-                  <span>LG</span>
-                  <span>•</span>
-                  <span>Mitsubishi</span>
-                  <span>•</span>
-                  <span>Daikin</span>
-                  <span>•</span>
-                  <span>Coleman</span>
-                  <span>•</span>
-                  <span>And More</span>
-                </div>
-                <p className="text-xs text-muted-foreground italic">
-                  Decodes any manufacturer model number • Provides Daikin replacements only
+                <p className="text-sm text-muted-foreground">
+                  Supports 26+ major HVAC manufacturers including Carrier, Trane, York, Lennox, Goodman, Rheem, and more
                 </p>
               </div>
             </div>
