@@ -14,9 +14,11 @@ export default function Header() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setLocation("/")}>
               <Zap className="h-6 w-6 text-primary" />
-              
+              <span className="text-xl font-bold text-primary">HVAC Decoder</span>
             </div>
-            <Badge variant="secondary" className="text-xs">Universal</Badge>
+            <Badge variant="secondary" className="text-xs">
+              Universal
+            </Badge>
           </div>
           
           <nav className="hidden md:flex items-center gap-4">
