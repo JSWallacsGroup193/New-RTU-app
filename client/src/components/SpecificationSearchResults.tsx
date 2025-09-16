@@ -1033,6 +1033,12 @@ export default function SpecificationSearchResults({
                 <span className="text-muted-foreground">Efficiency:</span>
                 <div className="font-medium capitalize">{searchParams.efficiency}</div>
               </div>
+              {searchParams.systemType === "Gas/Electric" && searchParams.heatingBTU && (
+                <div>
+                  <span className="text-muted-foreground">Heating BTU:</span>
+                  <div className="font-medium">{Number(searchParams.heatingBTU).toLocaleString()} BTU/hr</div>
+                </div>
+              )}
               <div>
                 <span className="text-muted-foreground">Results:</span>
                 <div className="font-medium text-primary">{searchResults.count} units</div>

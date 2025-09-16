@@ -157,16 +157,24 @@ export default function SpecificationCard({
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium">
-                {(() => {
-                  const heatingSpec = specifications.find(spec => spec.label.toLowerCase().includes('heating btu'));
-                  const useHeating = systemType === "Gas/Electric" && heatingSpec && !isNaN(Number(heatingSpec.value));
-                  return useHeating ? 
-                    `${Number(heatingSpec.value).toLocaleString()} Heating` : 
-                    `${Number(btuCapacity).toLocaleString()} Cooling`;
-                })()
-                }
-              </p>
+              {(() => {
+                const heatingSpec = specifications.find(spec => spec.label.toLowerCase().includes('heating btu'));
+                const hasHeating = systemType === "Gas/Electric" && heatingSpec && !isNaN(Number(heatingSpec.value));
+                return hasHeating ? (
+                  <>
+                    <p className="text-sm font-medium">
+                      {Number(btuCapacity).toLocaleString()} Cooling
+                    </p>
+                    <p className="text-sm font-medium">
+                      {Number(heatingSpec.value).toLocaleString()} Heating
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm font-medium">
+                    {Number(btuCapacity).toLocaleString()} Cooling
+                  </p>
+                );
+              })()}
               <p className="text-xs text-muted-foreground">BTU/hr</p>
             </div>
           </div>

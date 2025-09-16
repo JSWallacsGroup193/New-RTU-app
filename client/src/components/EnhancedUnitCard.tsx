@@ -1047,10 +1047,14 @@ export default function EnhancedUnitCard({
                 {formatTonnage(unit.btuCapacity)} Tons
               </div>
               <div className="text-sm text-muted-foreground">
-                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? 
-                  `${Number(unit.heatingBTU).toLocaleString()} BTU/h Heating` : 
+                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? (
+                  <>
+                    <div>{Number(unit.btuCapacity).toLocaleString()} BTU/h Cooling</div>
+                    <div>{Number(unit.heatingBTU).toLocaleString()} BTU/h Heating</div>
+                  </>
+                ) : (
                   `${Number(unit.btuCapacity).toLocaleString()} BTU/h Cooling`
-                }
+                )}
               </div>
             </div>
           </div>
@@ -1290,27 +1294,26 @@ export default function EnhancedUnitCard({
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium">
-                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? 
-                  `${Number(unit.heatingBTU).toLocaleString()} Heating` : 
-                  `${Number(unit.btuCapacity).toLocaleString()} Cooling`
-                }
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? "Heating BTU/hr" : "Cooling BTU/hr"}
-              </p>
+              {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? (
+                <>
+                  <p className="text-sm font-medium">
+                    {Number(unit.btuCapacity).toLocaleString()} Cooling
+                  </p>
+                  <p className="text-sm font-medium">
+                    {Number(unit.heatingBTU).toLocaleString()} Heating
+                  </p>
+                  <p className="text-xs text-muted-foreground">BTU/hr</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">
+                    {Number(unit.btuCapacity).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Cooling BTU/hr</p>
+                </>
+              )}
             </div>
           </div>
-          {/* Display Heating BTU for Gas/Electric systems */}
-          {unit.systemType === "Gas/Electric" && unit.heatingBTU && (
-            <div className="flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-orange-500" />
-              <div>
-                <p className="text-sm font-medium">{unit.heatingBTU.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Heating BTU/hr</p>
-              </div>
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <Fan className="h-4 w-4 text-muted-foreground" />
             <div>

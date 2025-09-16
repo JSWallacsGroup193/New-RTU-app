@@ -156,7 +156,7 @@ export default function ReplacementGrid({
                                 </div>
                                 <p className="text-sm text-muted-foreground">
                                   {replacement.systemType === "Gas/Electric" && typeof (replacement as any).heatingBTU === 'number' ? 
-                                    `${Number((replacement as any).heatingBTU).toLocaleString()} BTU/hr Heating` : 
+                                    `${Number(replacement.btuCapacity).toLocaleString()} Cooling / ${Number((replacement as any).heatingBTU).toLocaleString()} Heating BTU/hr` : 
                                     `${Number(replacement.btuCapacity).toLocaleString()} BTU/hr Cooling`
                                   } • {replacement.voltage}V
                                 </p>
