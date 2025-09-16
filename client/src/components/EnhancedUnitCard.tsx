@@ -1038,25 +1038,40 @@ export default function EnhancedUnitCard({
 
           {/* Prominent Capacity Display */}
           <div className="text-center bg-muted rounded-lg p-4">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Thermometer className="w-4 h-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">CAPACITY</span>
-            </div>
-            <div className="space-y-1">
-              <div className="text-2xl font-bold text-foreground" data-testid={`text-capacity-${unit.sizeMatch}`}>
-                {formatTonnage(unit.btuCapacity)} Tons
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? (
-                  <>
-                    <div>{Number(unit.btuCapacity).toLocaleString()} BTU/h Cooling</div>
-                    <div>{Number(unit.heatingBTU).toLocaleString()} BTU/h Heating</div>
-                  </>
-                ) : (
-                  `${Number(unit.btuCapacity).toLocaleString()} BTU/h Cooling`
-                )}
-              </div>
-            </div>
+            {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? (
+              <>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <Thermometer className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs text-muted-foreground">HEATING CAPACITY</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-2xl font-bold text-foreground" data-testid={`text-heating-capacity-${unit.sizeMatch}`}>
+                    {Number(unit.heatingBTU).toLocaleString()} BTU/h
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Gas Heating Capacity
+                  </div>
+                  <div className="text-xs text-muted-foreground pt-1">
+                    {formatTonnage(unit.btuCapacity)} Tons Cooling ({Number(unit.btuCapacity).toLocaleString()} BTU/h)
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <Thermometer className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">CAPACITY</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-2xl font-bold text-foreground" data-testid={`text-capacity-${unit.sizeMatch}`}>
+                    {formatTonnage(unit.btuCapacity)} Tons
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {Number(unit.btuCapacity).toLocaleString()} BTU/h Cooling
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Key Specifications */}
