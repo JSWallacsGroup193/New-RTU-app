@@ -237,7 +237,7 @@ export default function SearchResults({ originalUnit, replacements, onNewSearch 
     }
 
     // Check project capacity before saving
-    const selectedProject = projects.find(p => p.id === selectedProjectId);
+    const selectedProject = projects.find((p: any) => p.id === selectedProjectId);
     if (selectedProject) {
       const currentUnits = selectedProject.unitCount || 0;
       const totalAfterSave = currentUnits + selectedUnits.length;
