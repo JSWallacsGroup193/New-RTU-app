@@ -158,9 +158,13 @@ export default function SpecificationCard({
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium">
-                {systemType === "Gas/Electric" && specifications.find(spec => spec.label.toLowerCase().includes('heating btu')) ? 
-                  `${specifications.find(spec => spec.label.toLowerCase().includes('heating btu'))?.value} Heating` : 
-                  `${btuCapacity.toLocaleString()} Cooling`
+                {(() => {
+                  const heatingSpec = specifications.find(spec => spec.label.toLowerCase().includes('heating btu'));
+                  const useHeating = systemType === "Gas/Electric" && heatingSpec && !isNaN(Number(heatingSpec.value));
+                  return useHeating ? 
+                    `${Number(heatingSpec.value).toLocaleString()} Heating` : 
+                    `${Number(btuCapacity).toLocaleString()} Cooling`;
+                })()
                 }
               </p>
               <p className="text-xs text-muted-foreground">BTU/hr</p>

@@ -106,6 +106,21 @@ function extractSpecificationValue(specifications: Array<{label: string, value: 
   return spec ? (isNaN(Number(spec.value)) ? spec.value : Number(spec.value)) : undefined;
 }
 
+// System type normalization to handle variations
+function normalizeSystemType(systemType: string): string {
+  const normalized = systemType.replace(/[\s/-]/g, '/').toLowerCase();
+  if (normalized.includes('gas') && normalized.includes('electric')) {
+    return 'Gas/Electric';
+  }
+  if (normalized.includes('heat') && normalized.includes('pump')) {
+    return 'Heat Pump';
+  }
+  if (normalized.includes('straight') || normalized.includes('cooling') || normalized.includes('a/c')) {
+    return 'Straight A/C';
+  }
+  return systemType; // Return original if no match
+}
+
 // Family performance data for accurate specifications
 const FAMILY_SPECS: Record<string, any> = {
   DSC: { seer: 14.0, eer: 12.0, driveType: "Fixed Speed", stages: 1, efficiency: "Standard" },
@@ -339,6 +354,8 @@ export default function SpecificationSearchResults({
         seerRating: authenticallyCalculatedSeer,
         eerRating: familySpecs.eer,
         hspfRating: unit.systemType === "Heat Pump" ? (hspfRating || familySpecs.hspf) : undefined,
+        heatingBTU: heatingBTU, // Add the extracted heatingBTU field
+        heatKitKW: heatKitKW,
         refrigerant: "R-32",
         driveType: driveType || familySpecs.driveType,
         coolingStages: coolingStages || familySpecs.stages,
@@ -1445,9 +1462,9 @@ export default function SpecificationSearchResults({
                         {selectedUnitDetails.systemType === "Gas/Electric" && selectedUnitDetails.heatingBTU ? "Heating BTU:" : "BTU Capacity:"}
                       </span>
                       <span className="font-medium">
-                        {selectedUnitDetails.systemType === "Gas/Electric" && selectedUnitDetails.heatingBTU ? 
-                          `${selectedUnitDetails.heatingBTU.toLocaleString()} BTU/hr` : 
-                          `${selectedUnitDetails.btuCapacity.toLocaleString()} BTU/hr`
+                        {selectedUnitDetails.systemType === "Gas/Electric" && typeof selectedUnitDetails.heatingBTU === 'number' ? 
+                          `${Number(selectedUnitDetails.heatingBTU).toLocaleString()} BTU/hr` : 
+                          `${Number(selectedUnitDetails.btuCapacity).toLocaleString()} BTU/hr`
                         }
                       </span>
                     </div>

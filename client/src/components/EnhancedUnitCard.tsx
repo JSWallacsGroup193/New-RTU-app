@@ -1047,9 +1047,9 @@ export default function EnhancedUnitCard({
                 {formatTonnage(unit.btuCapacity)} Tons
               </div>
               <div className="text-sm text-muted-foreground">
-                {unit.systemType === "Gas/Electric" && unit.heatingBTU ? 
-                  `${unit.heatingBTU.toLocaleString()} BTU/h Heating` : 
-                  `${unit.btuCapacity.toLocaleString()} BTU/h Cooling`
+                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? 
+                  `${Number(unit.heatingBTU).toLocaleString()} BTU/h Heating` : 
+                  `${Number(unit.btuCapacity).toLocaleString()} BTU/h Cooling`
                 }
               </div>
             </div>
@@ -1291,13 +1291,13 @@ export default function EnhancedUnitCard({
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium">
-                {unit.systemType === "Gas/Electric" && unit.heatingBTU ? 
-                  `${unit.heatingBTU.toLocaleString()} Heating` : 
-                  `${unit.btuCapacity.toLocaleString()} Cooling`
+                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? 
+                  `${Number(unit.heatingBTU).toLocaleString()} Heating` : 
+                  `${Number(unit.btuCapacity).toLocaleString()} Cooling`
                 }
               </p>
               <p className="text-xs text-muted-foreground">
-                {unit.systemType === "Gas/Electric" && unit.heatingBTU ? "Heating BTU/hr" : "Cooling BTU/hr"}
+                {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? "Heating BTU/hr" : "Cooling BTU/hr"}
               </p>
             </div>
           </div>
