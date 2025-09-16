@@ -1468,7 +1468,7 @@ export default function SpecificationSearchResults({
                         {selectedUnitDetails.systemType === "Gas/Electric" && selectedUnitDetails.heatingBTU ? "Heating BTU:" : "BTU Capacity:"}
                       </span>
                       <span className="font-medium">
-                        {selectedUnitDetails.systemType === "Gas/Electric" && typeof selectedUnitDetails.heatingBTU === 'number' ? 
+                        {selectedUnitDetails.systemType === "Gas/Electric" && selectedUnitDetails.heatingBTU && Number(selectedUnitDetails.heatingBTU) > 0 ? 
                           `${Number(selectedUnitDetails.heatingBTU).toLocaleString()} BTU/hr` : 
                           `${Number(selectedUnitDetails.btuCapacity).toLocaleString()} BTU/hr`
                         }

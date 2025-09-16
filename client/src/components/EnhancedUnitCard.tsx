@@ -1038,7 +1038,7 @@ export default function EnhancedUnitCard({
 
           {/* Prominent Capacity Display */}
           <div className="text-center bg-muted rounded-lg p-4">
-            {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? (
+            {unit.systemType === "Gas/Electric" && unit.heatingBTU && Number(unit.heatingBTU) > 0 ? (
               <>
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <Thermometer className="w-4 h-4 text-orange-500" />
@@ -1309,7 +1309,7 @@ export default function EnhancedUnitCard({
           <div className="flex items-center gap-2">
             <Thermometer className="h-4 w-4 text-muted-foreground" />
             <div>
-              {unit.systemType === "Gas/Electric" && typeof unit.heatingBTU === 'number' ? (
+              {unit.systemType === "Gas/Electric" && unit.heatingBTU && Number(unit.heatingBTU) > 0 ? (
                 <>
                   <p className="text-sm font-medium">
                     {Number(unit.btuCapacity).toLocaleString()} Cooling
