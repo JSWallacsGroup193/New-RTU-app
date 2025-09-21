@@ -225,29 +225,78 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "Carrier",
     patterns: [
-      /^(50|38)(TC|HD|HV|TQ)([0-9]{2,4})[A-Z0-9]*$/i, // 50TCQA04, 38HDR048 - Carrier specific prefixes
-      /^([0-9]{2})(TC|HD|HV|TQ)([0-9]{2,3})[A-Z0-9]*$/i // Carrier patterns excluding Bryant prefixes
+      // Enhanced pattern based on JSON schema - supports 48/50 families with wildcard handling
+      /^((?:48|50)[A-Z]{2})[A-Z0-9\-\*]*?(0?(07|08|09|12|14|16|24|30|36|48|60))[A-Z0-9\-\*]*?([1-4A-Z])$/i,
+      /^(50|38)(TC|HD|HV|TQ)([0-9]{2,4})[A-Z0-9]*$/i, // Legacy pattern for compatibility
+      /^([0-9]{2})(TC|HD|HV|TQ)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[3] || match[2];
-      const btuCapacity = BTU_MAPPINGS.carrier[sizeCode];
+      let sizeCode: string;
+      let family: string | undefined;
+      let voltageToken: string | undefined;
+      
+      // Enhanced parsing for new pattern
+      if (match[2] && match[4]) {
+        family = match[1];
+        sizeCode = match[3] || match[2];
+        voltageToken = match[4];
+      } else {
+        sizeCode = match[3] || match[2];
+      }
+
+      // Enhanced BTU mapping including commercial sizes
+      const carrierBTUMapping: Record<string, number> = {
+        // Residential package units
+        "24": 24000, "30": 30000, "36": 36000, "48": 48000, "60": 60000,
+        // Commercial sizes from JSON schema
+        "07": 90000, "007": 90000, "08": 90000, "008": 90000, "09": 102000, "009": 102000,
+        "12": 120000, "012": 120000, "14": 150000, "014": 150000, "16": 180000, "016": 180000,
+        // Legacy codes
+        "018": 18000, "024": 24000, "042": 42000, "072": 72000, "090": 90000, "120": 120000
+      };
+
+      const btuCapacity = carrierBTUMapping[sizeCode] || BTU_MAPPINGS.carrier[sizeCode];
       if (!btuCapacity) return null;
 
-      const systemType = modelNumber.includes("TC") ? "Heat Pump" :
-                        modelNumber.includes("HD") ? "Gas/Electric" : "Straight A/C";
+      // Enhanced system type detection using family codes
+      let systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C" = "Straight A/C";
+      if (family) {
+        if (family.includes("48HC") || family.includes("48TC") || family.includes("48TJ")) {
+          systemType = "Gas/Electric";
+        } else if (family.includes("50HC") || family.includes("50TC") || family.includes("50TJ")) {
+          systemType = "Heat Pump"; // 50 series can be HP or AC, defaulting to HP
+        }
+      } else {
+        // Fallback to legacy detection
+        systemType = modelNumber.includes("TC") ? "Heat Pump" :
+                     modelNumber.includes("HD") ? "Gas/Electric" : "Straight A/C";
+      }
+
+      // Enhanced voltage detection from JSON schema
+      const voltageMapping: Record<string, string> = {
+        "A": "208/230-1-60", "D": "460-3-60", "E": "575-3-60",
+        "1": "208/230-1-60", "3": "208/230-3-60", "4": "460-3-60"
+      };
+      
+      const voltage = voltageToken ? voltageMapping[voltageToken] || "208/230-1-60" : "208/230-1-60";
+      const phases = voltage.includes("-3-") ? "3" : "1";
+
+      // Higher confidence for enhanced pattern matching
+      const confidence = family && voltageToken ? 95 : 90;
 
       return {
         manufacturer: "Carrier",
-        confidence: 90,
-        systemType: systemType as any,
+        confidence,
+        systemType,
         btuCapacity,
-        voltage: "208-230",
-        phases: "1",
+        voltage: voltage.split("-")[0] + "-" + voltage.split("-")[1],
+        phases,
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
           { label: "Sound Level", value: "72", unit: "dB" },
-          { label: "Application", value: "Package Unit" }
+          { label: "Application", value: "Package Unit" },
+          ...(family ? [{ label: "Family", value: family }] : [])
         ]
       };
     }
@@ -1333,13 +1382,17 @@ export class HVACModelParser {
   /**
    * Extract system type using learned rules
    */
-  private extractSystemType(modelNumber: string, rules: any): string | null {
+  private extractSystemType(modelNumber: string, rules: any): "Heat Pump" | "Gas/Electric" | "Straight A/C" | null {
     if (rules.method === "pattern_match" && rules.patterns) {
       const upperModel = modelNumber.toUpperCase();
       
       for (const [pattern, systemType] of Object.entries(rules.patterns)) {
         if (upperModel.includes(pattern)) {
-          return systemType as string;
+          const validatedType = systemType as string;
+          // Validate it's a proper system type
+          if (validatedType === "Heat Pump" || validatedType === "Gas/Electric" || validatedType === "Straight A/C") {
+            return validatedType;
+          }
         }
       }
     }

@@ -1,0 +1,465 @@
+{
+  "metadata": {
+    "title": "HVAC Packaged Units \u2013 Nomenclature Full Report (JSON)",
+    "scope": "U.S.-installable packaged units (straight A/C, heat pump, gas/electric), legacy + current.",
+    "intended_use": "Programmatic decoding in Replit; also serves as a human-readable reference via 'notes' fields.",
+    "version": "1.0",
+    "last_updated": "2025-09-09",
+    "notes": [
+      "Regex patterns aim to match common real-world strings; vendors sometimes add filler (*) or dashes.",
+      "capacity_code maps give tons; for non-mapped numeric capacity codes, compute as BTU/12,000 when practical.",
+      "voltage_code maps vary by OEM; when unknown, leave voltage blank but keep voltage_code for downstream handling."
+    ]
+  },
+  "brands": [
+    {
+      "brand_group": "Goodman / Amana / Daikin (residential packaged)",
+      "brand_aliases": [
+        "Goodman",
+        "Amana",
+        "Daikin (unitary)"
+      ],
+      "families": [
+        "GPC",
+        "GPH",
+        "GPG",
+        "APC",
+        "APH",
+        "APG",
+        "DPC",
+        "DPH",
+        "DPG"
+      ],
+      "unit_types": {
+        "C": "A/C",
+        "H": "Heat Pump",
+        "G": "Gas/Electric",
+        "D": "Dual-Fuel (HP + Gas)"
+      },
+      "regex": "^(?:A|G|D)P([CHGD])([MH]?)(\\d)(\\d{2})(\\d{3})?([A-Z]\\d{2})?-(\\d)$",
+      "regex_notes": "Matches legacy strings like GPC1460H41-3. Groups: type, config (optional), series digit (SEER tier), 2-digit tons, optional 3-digit gas MBH, optional variant code (e.g., H41), trailing voltage digit.",
+      "groups": {
+        "type": 1,
+        "config": 2,
+        "series": 3,
+        "ton_code": 4,
+        "heat_mbh": 5,
+        "variant": 6,
+        "voltage_code": 7
+      },
+      "maps": {
+        "ton_code": {
+          "18": 1.5,
+          "24": 2.0,
+          "30": 2.5,
+          "36": 3.0,
+          "42": 3.5,
+          "48": 4.0,
+          "60": 5.0
+        },
+        "voltage_code": {
+          "1": "208/230-1-60",
+          "3": "208/230-3-60"
+        }
+      },
+      "examples": [
+        "GPC1460H41-3",
+        "GPH1448H41-3",
+        "GPG1648-3",
+        "GPC1336-2",
+        "APG1636040M41-1"
+      ],
+      "notes": "Structure: GP/AP/DP + Type (C/H/G/D) + optional airflow config (M/H) + series digit (efficiency tier) + 2-digit cooling tonnage +\n(gas packs only) 3-digit furnace input MBH + optional variant code + '-' + voltage digit.\nTonnage codes use 18=1.5T ... 60=5T. Voltage code commonly 1=208/230-1, 3=208/230-3. Variant blocks like H41 often bundle refrigerant\nand minor design identifiers. Newer Daikin/Amana strings follow same logic with different marketing prefixes."
+    },
+    {
+      "brand_group": "Carrier / Bryant (packaged & light commercial)",
+      "brand_aliases": [
+        "Carrier",
+        "Bryant"
+      ],
+      "families": [
+        "48HC",
+        "48TC",
+        "48TJ",
+        "50HC",
+        "50TC",
+        "50TJ",
+        "581",
+        "582 (Bryant)"
+      ],
+      "regex": "^((?:48|50)[A-Z]{2})[A-Z0-9\\-\\*]*?(0?(07|08|09|12|14|16|24|30|36|48|60))[A-Z0-9\\-\\*]*?([1-4A-Z])",
+      "regex_notes": "Accepts 48/50 prefix families and wildcards. Captures capacity code including 2-digit residential and 2/3-digit commercial sizes; final group approximates voltage/option token.",
+      "groups": {
+        "family": 1,
+        "size_code": 2,
+        "voltage_token": 4
+      },
+      "maps": {
+        "family": {
+          "48HC": "Gas/Electric",
+          "48TC": "Gas/Electric",
+          "48TJ": "Gas/Electric",
+          "50HC": "A/C or HP",
+          "50TC": "A/C or HP",
+          "50TJ": "A/C or HP"
+        },
+        "size_code": {
+          "07": 7.5,
+          "08": 7.5,
+          "09": 8.5,
+          "12": 10.0,
+          "14": 12.5,
+          "16": 15.0,
+          "24": 2.0,
+          "30": 2.5,
+          "36": 3.0,
+          "48": 4.0,
+          "60": 5.0,
+          "007": 7.5,
+          "008": 7.5,
+          "009": 8.5,
+          "012": 10.0,
+          "014": 12.5,
+          "016": 15.0
+        },
+        "voltage_token": {
+          "A": "208/230-1-60",
+          "D": "460-3-60",
+          "E": "575-3-60",
+          "1": "208/230-1-60",
+          "3": "208/230-3-60",
+          "4": "460-3-60"
+        }
+      },
+      "examples": [
+        "48TC**08***3",
+        "48HC**12***3",
+        "50TC**14***3",
+        "48TJ016-3",
+        "582LP14M180A3A0AA (Bryant)"
+      ],
+      "notes": "48 = gas/electric; 50 = electric/HP lines. Post-family code options encode controls, motor/drive, heat kit, voltage. Residential packaged lines may use 24..60 ton codes; commercial use 07..16 for 7.5\u201315T."
+    },
+    {
+      "brand_group": "Payne (Carrier group)",
+      "brand_aliases": [
+        "Payne"
+      ],
+      "families": [
+        "PA (AC)",
+        "PH (HP)",
+        "PY (Gas/Electric)",
+        "PA4Z/PA5 (SEER2)"
+      ],
+      "regex": "^P[AHY]\\d[A-Z]{2}(\\d{3})(\\d{3})",
+      "regex_notes": "Three-digit cooling BTUh code (e.g., 036=3T) followed by three-digit heat MBH if gas; earlier/other fields carry tier and refrigerant.",
+      "groups": {
+        "cool_btu": 1,
+        "heat_mbh": 2
+      },
+      "maps": {
+        "cool_btu": {
+          "018": 1.5,
+          "024": 2.0,
+          "030": 2.5,
+          "036": 3.0,
+          "042": 3.5,
+          "048": 4.0,
+          "060": 5.0,
+          "072": 6.0,
+          "090": 7.5,
+          "102": 8.5,
+          "120": 10.0,
+          "150": 12.5,
+          "180": 15.0,
+          "240": 20.0,
+          "300": 25.0
+        },
+        "voltage_hint": {
+          "N": "208/230-1-60",
+          "J": "208/230-3-60"
+        }
+      },
+      "examples": [
+        "PA4ZNA036000-TP",
+        "PY5GNAB36090"
+      ],
+      "notes": "Shares logic with Carrier/ICP; voltage sometimes implied by trailing letters. Use cool_btu/12 for tons if not mapped explicitly."
+    },
+    {
+      "brand_group": "ICP (Comfortmaker / Tempstar / Heil / Day & Night / KeepRite / Arcoaire)",
+      "brand_aliases": [
+        "Comfortmaker",
+        "Tempstar",
+        "Heil",
+        "Day & Night",
+        "KeepRite",
+        "Arcoaire",
+        "AirQuest"
+      ],
+      "families": [
+        "PGx (Gas/Electric)",
+        "PHx (Heat Pump)",
+        "PCx (Cooling)"
+      ],
+      "regex": "^P\\w{2}\\d(\\d{2})(\\d{3})([A-Z]\\d{2,3})?$",
+      "regex_notes": "Uniform packaged format. Captures 2-digit ton code and 3-digit gas heat MBH if present, plus optional voltage/variant token.",
+      "groups": {
+        "ton_code": 1,
+        "heat_mbh": 2,
+        "variant": 3
+      },
+      "maps": {
+        "ton_code": {
+          "18": 1.5,
+          "24": 2.0,
+          "30": 2.5,
+          "36": 3.0,
+          "42": 3.5,
+          "48": 4.0,
+          "60": 5.0
+        },
+        "voltage_letters": {
+          "K": "208/230-1",
+          "M": "208/230-3",
+          "N": "460-3"
+        }
+      },
+      "examples": [
+        "PGD436090K000K",
+        "PHM048-3",
+        "PAK060-3"
+      ],
+      "notes": "Brand letter may vary but decoding is consistent. Gas packs include furnace MBH; HP/AC use 000 or omit heat MBH; end letters often embed voltage."
+    },
+    {
+      "brand_group": "Lennox (and Allied: Armstrong, AirEase, Concord)",
+      "brand_aliases": [
+        "Lennox",
+        "Armstrong Air",
+        "AirEase",
+        "Concord",
+        "Allied Commercial"
+      ],
+      "families": [
+        "GCS (gas/electric)",
+        "LRP (residential packaged)",
+        "RPG/RPH (Allied)"
+      ],
+      "regex": "^[A-Z]{2,3}\\d{2}[- ]?\\d{3}(?:-\\d{3})?-[A-Z]$",
+      "regex_notes": "Classic Lennox: series prefix + 3-digit cool MBH + optional 3-digit heat MBH + dash + voltage letter.",
+      "groups": {
+        "series": 1,
+        "cool_mbh": 0,
+        "heat_mbh": 0,
+        "voltage_letter": 0
+      },
+      "maps": {
+        "voltage_letter": {
+          "P": "208/230-1-60",
+          "X": "208/230-3-60",
+          "Y": "460-3-60",
+          "Z": "575-3-60"
+        }
+      },
+      "examples": [
+        "GCS16-090-350-2Y",
+        "LRP14GE60P"
+      ],
+      "notes": "Commercial: 090=7.5T, 120=10T, 150=12.5T, etc. Residential LRP uses 2-digit ton codes in suffix; voltage by letter at end."
+    },
+    {
+      "brand_group": "Johnson Controls (York / Coleman / Luxaire / Champion / Fraser-Johnston / TempMaster)",
+      "brand_aliases": [
+        "York",
+        "Coleman",
+        "Luxaire",
+        "Champion",
+        "Fraser-Johnston",
+        "TempMaster"
+      ],
+      "families": [
+        "PC/PH/PG (residential)",
+        "ZX/ZY/ZQ/ZL/ZH/ZJ/ZR (commercial Sunline)"
+      ],
+      "regex": "^((?:ZX|ZY|ZQ|ZL|ZH|ZJ|ZR))[A-Z0-9\\-\\*]*?(04|05|06|07|A7|08|09|12|14|037|049|061|078|090|102|120|150)[A-Z0-9\\-\\*]*?([245])",
+      "regex_notes": "Captures commercial Sunline families and capacity; final digit often voltage code (2=208/230-3, 4=460-3, 5=575-3). Residential PC/PH/PG mirror ICP logic.",
+      "groups": {
+        "family": 1,
+        "cap_code": 2,
+        "voltage_code": 3
+      },
+      "maps": {
+        "cap_code": {
+          "04": 3.0,
+          "05": 4.0,
+          "06": 5.0,
+          "07": 6.0,
+          "A7": 6.0,
+          "08": 7.5,
+          "09": 8.5,
+          "12": 10.0,
+          "14": 12.5,
+          "037": 3.0,
+          "049": 4.0,
+          "061": 5.0,
+          "078": 6.5,
+          "090": 7.5,
+          "102": 8.5,
+          "120": 10.0,
+          "150": 12.5
+        },
+        "voltage_code": {
+          "2": "208/230-3-60",
+          "4": "460-3-60",
+          "5": "575-3-60"
+        }
+      },
+      "examples": [
+        "ZX08***4",
+        "ZY12***4",
+        "ZH090CA2A1AA1A2",
+        "PCG4B36-1002X1A"
+      ],
+      "notes": "Residential PC/PH/PG: treat like ICP (2-digit tons, heat MBH for gas). Commercial ZX/\u2026 use BTU-style codes shown above; many option characters between family and voltage."
+    },
+    {
+      "brand_group": "Nortek/Nordyne (Frigidaire / Broan / Gibson / Westinghouse / Tappan / Maytag / Kelvinator / Airtemp)",
+      "brand_aliases": [
+        "Frigidaire",
+        "Broan",
+        "Gibson",
+        "Westinghouse",
+        "Tappan",
+        "Maytag",
+        "Kelvinator",
+        "Airtemp"
+      ],
+      "families": [
+        "P* (AC)",
+        "Q* (HP)",
+        "R* (Gas/Electric)",
+        "New: P95/Q95"
+      ],
+      "regex": "^[A-Z]\\d[A-Z]{2}-?\\d{3}[A-Z]\\d{3}[A-Z]$",
+      "regex_notes": "Legacy format: leading letter(s) for brand/family, efficiency digit, refrigerant/series letters, 3-digit cool MBH, voltage letter, 3-digit heat MBH (gas packs), trailing revision.",
+      "groups": {
+        "efficiency_digit": 2,
+        "cool_mbh": 0,
+        "voltage_letter": 0,
+        "heat_mbh": 0
+      },
+      "maps": {
+        "voltage_letter": {
+          "C": "208/230-1",
+          "D": "208/230-3",
+          "E": "460-3"
+        }
+      },
+      "examples": [
+        "GQ7RD-036C090",
+        "GR4GM-060D115",
+        "VR8GD-048C115"
+      ],
+      "notes": "Compute tons via cool_mbh/12. New simplified P95/Q95: keep a per-series table outside regex; capacity still explicit in numbers."
+    },
+    {
+      "brand_group": "AAON (Commercial RTU)",
+      "brand_aliases": [
+        "AAON"
+      ],
+      "families": [
+        "RN",
+        "RQ",
+        "RL"
+      ],
+      "regex": "^(RN|RQ|RL)-([0-9]{3})-([13489])(?:-(.*))?$",
+      "regex_notes": "Captures family, 3-digit capacity code, and one-digit voltage code. Feature string (group 4) may exist and encodes extensive options.",
+      "groups": {
+        "family": 1,
+        "capacity_code": 2,
+        "voltage_code": 3,
+        "feature_string": 4
+      },
+      "maps": {
+        "capacity_code": {
+          "025": 2.0,
+          "030": 2.5,
+          "036": 3.0,
+          "050": 5.0,
+          "060": 5.0,
+          "070": 6.0,
+          "090": 7.5,
+          "120": 10.0,
+          "150": 12.5,
+          "180": 15.0,
+          "240": 20.0,
+          "300": 25.0
+        },
+        "voltage_code": {
+          "1": "230/1/60",
+          "2": "230/3/60",
+          "3": "460/3/60",
+          "4": "575/3/60",
+          "8": "208/3/60",
+          "9": "208/1/60"
+        },
+        "family": {
+          "RN": "A/C",
+          "RQ": "Heat Pump",
+          "RL": "A/C"
+        }
+      },
+      "examples": [
+        "RN-025-3",
+        "RQ-006-8",
+        "RN-090-2"
+      ],
+      "notes": "Map capacity_code to tons using AAON tables; where code not listed, infer tons by MBH/12. Voltage: 2\u2248230/3, 3=460/3, 4=575/3, 8\u2248208/3, 9\u2248208/1."
+    },
+    {
+      "brand_group": "Addison (Commercial DOAS/RTU)",
+      "brand_aliases": [
+        "Addison"
+      ],
+      "families": [
+        "PR",
+        "NR",
+        "JR",
+        "DR"
+      ],
+      "regex": "^(PR|NR|JR|DR)[A-Z]([KN])[A-Z0-9\\-\\*]*?(300|360|420|480|600|720)[A-Z0-9\\-\\*]*?([234])",
+      "regex_notes": "Captures family, type (K=A/C compact DOAS, N=Heat Pump), 3-digit capacity MBH code, and voltage code at end. Middle string carries cabinet/controls.",
+      "groups": {
+        "family": 1,
+        "type": 2,
+        "capacity_code": 3,
+        "voltage_code": 4
+      },
+      "maps": {
+        "capacity_code": {
+          "300": 25.0,
+          "360": 30.0,
+          "420": 35.0,
+          "480": 40.0,
+          "600": 50.0,
+          "720": 60.0
+        },
+        "voltage_code": {
+          "2": "208/3/60",
+          "3": "230/3/60",
+          "4": "460/3/60"
+        },
+        "type": {
+          "K": "A/C",
+          "N": "Heat Pump"
+        }
+      },
+      "examples": [
+        "PRAK360S3A4",
+        "PRNK300S1J3"
+      ],
+      "notes": "Application letter (A/R/M/E) appears just after PR/NR; cabinet platforms S1, S3, etc.; control option letter precedes voltage. Use capacity_code/12 for tons where needed."
+    }
+  ]
+}

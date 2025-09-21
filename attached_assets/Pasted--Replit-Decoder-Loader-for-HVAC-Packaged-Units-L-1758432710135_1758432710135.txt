@@ -1,0 +1,237 @@
+
+"""
+Replit Decoder Loader for HVAC Packaged Units
+---------------------------------------------
+- Loads `packaged_units_nomenclature_full.json`
+- Exposes: load_report(path), Decoder class with decode(model), decode_best(model), decode_all(models)
+- Returns normalized dicts: brand_group, brand_aliases, family, unit_category, tons, voltage, raw_groups, notes
+"""
+
+import json, re, math, os
+from typing import Dict, Any, List, Optional
+
+def load_report(path: str) -> Dict[str, Any]:
+    with open(path, "r") as f:
+        return json.load(f)
+
+def _safe_get_group(m, idx: int) -> Optional[str]:
+    try:
+        g = m.group(idx)
+        return g if g is not None else None
+    except Exception:
+        return None
+
+def _tons_from_code(code: Optional[str]) -> Optional[float]:
+    if code is None:
+        return None
+    # Try integer BTUh or 2-digit ton code
+    try:
+        s = str(code)
+        # remove non-digits but keep digits
+        digits = ''.join(ch for ch in s if ch.isdigit())
+        if not digits:
+            return None
+        if len(digits) == 2:
+            return round(int(digits)/12.0, 3)
+        if len(digits) == 3:
+            # 072 -> 6.0, 090 -> 7.5 (exact), others div by 12
+            val = int(digits)
+            if digits.endswith("90"):
+                return 7.5
+            return round(val/12.0, 3)
+        if len(digits) in (4,5,6):
+            # treat as BTUh (e.g., 36000)
+            return round(int(digits)/12000.0, 3)
+        return None
+    except Exception:
+        return None
+
+class Decoder:
+    def __init__(self, report: Dict[str, Any]):
+        self.meta = report.get("metadata", {})
+        self.brand_specs = report.get("brands", [])
+        # precompile regexes
+        self.compiled = []
+        for spec in self.brand_specs:
+            try:
+                rx = re.compile(spec["regex"], re.IGNORECASE)
+            except Exception as e:
+                # store error but continue
+                rx = None
+            self.compiled.append((spec, rx))
+
+    def _map_val(self, mapping: Dict[str, Any], key: Optional[str]) -> Optional[Any]:
+        if not key or not isinstance(mapping, dict):
+            return None
+        return mapping.get(key)
+
+    def _infer_unit_category(self, spec: Dict[str, Any], groups: Dict[str, str]) -> Optional[str]:
+        # Look for explicit maps that imply the unit type
+        # Common fields: family/type; maps may define meaning
+        maps = spec.get("maps", {})
+        # Family-based mapping
+        fam_val = groups.get("family")
+        if fam_val and "family" in maps and isinstance(maps["family"], dict):
+            # The mapped value might already be the category
+            val = maps["family"].get(fam_val.upper()) or maps["family"].get(fam_val)
+            if val:
+                return val
+        # Type character mapping (e.g., C/H/G/D or Addison K/N)
+        t = groups.get("type")
+        if t and "type" in maps and isinstance(maps["type"], dict):
+            val = maps["type"].get(t.upper()) or maps["type"].get(t)
+            if val:
+                return val
+        # Heuristic for Goodman-style models using the type capture
+        typ = groups.get("type")
+        if typ:
+            typ = typ.upper()
+            if typ == "C":
+                return "A/C"
+            if typ == "H":
+                return "Heat Pump"
+            if typ == "G":
+                return "Gas/Electric"
+            if typ == "D":
+                return "Dual Fuel"
+        return None
+
+    def _derive_tons(self, spec: Dict[str, Any], grpvals: Dict[str, str]) -> Optional[float]:
+        maps = spec.get("maps", {})
+        # Try capacity maps in order of common field names
+        for key in ("capacity_code","size_code","ton_code","cool_btu","cap_code","capacity"):
+            code = grpvals.get(key)
+            if code is None:
+                continue
+            # explicit map
+            if key in maps and isinstance(maps[key], dict):
+                if code in maps[key]:
+                    return float(maps[key][code])
+                # try uppercase/lowercase
+                u = code.upper()
+                if u in maps[key]:
+                    return float(maps[key][u])
+            # fallback numeric derivation
+            t = _tons_from_code(code)
+            if t is not None:
+                return t
+        # If nothing matched, attempt to scan any numeric-looking group
+        for v in grpvals.values():
+            t = _tons_from_code(v)
+            if t and 0.5 <= t <= 60:
+                return t
+        return None
+
+    def _derive_voltage(self, spec: Dict[str, Any], grpvals: Dict[str, str]) -> (Optional[str], Optional[str]):
+        maps = spec.get("maps", {})
+        # Preferred: voltage_code field
+        for key in ("voltage_code","voltage_letter","voltage_token"):
+            vc = grpvals.get(key)
+            if vc:
+                m = maps.get(key) or maps.get("voltage_code") or maps.get("voltage_letters")
+                if isinstance(m, dict):
+                    # exact and uppercase attempts
+                    if vc in m:
+                        return vc, m[vc]
+                    u = vc.upper()
+                    if u in m:
+                        return vc, m[u]
+                return vc, None
+        # Heuristics from variant tokens (e.g., 'A','D','E')
+        vt = grpvals.get("variant") or grpvals.get("voltage_token")
+        if vt and "voltage_token" in maps:
+            m = maps["voltage_token"]
+            if vt in m:
+                return vt, m[vt]
+        return None, None
+
+    def decode(self, model: str) -> Dict[str, Any]:
+        model_norm = model.strip()
+        for spec, rx in self.compiled:
+            if rx is None:
+                continue
+            m = rx.match(model_norm)
+            if not m:
+                continue
+            # collect captured groups per spec["groups"]
+            gmap = spec.get("groups", {})
+            grpvals = {}
+            for k, idx in gmap.items():
+                grpvals[k] = _safe_get_group(m, idx)
+            # derive unit category and tons
+            unit_category = self._infer_unit_category(spec, grpvals)
+            tons = self._derive_tons(spec, grpvals)
+            # voltage
+            voltage_code, voltage = self._derive_voltage(spec, grpvals)
+            # family if present
+            family = grpvals.get("family")
+            out = {
+                "ok": True,
+                "brand_group": spec.get("brand_group"),
+                "brand_aliases": spec.get("brand_aliases", []),
+                "family": family,
+                "unit_category": unit_category,
+                "tons": tons,
+                "voltage_code": voltage_code,
+                "voltage": voltage,
+                "raw_groups": grpvals,
+                "notes": spec.get("notes", ""),
+            }
+            return out
+        return {"ok": False, "error": "No schema matched", "model": model}
+
+    def decode_best(self, model: str) -> Dict[str, Any]:
+        """Try decode() and add a simple confidence score: prefers decodes with tons & voltage resolved."""
+        results = []
+        for spec, rx in self.compiled:
+            if rx is None:
+                continue
+            m = rx.match(model.strip())
+            if not m:
+                continue
+            # emulate decode but compute score
+            gmap = spec.get("groups", {})
+            grpvals = {k: (m.group(i) if i <= (m.lastindex or 0) else None) for k, i in gmap.items()}
+            unit_category = self._infer_unit_category(spec, grpvals)
+            tons = self._derive_tons(spec, grpvals)
+            voltage_code, voltage = self._derive_voltage(spec, grpvals)
+            score = 0
+            if unit_category: score += 1
+            if tons: score += 2
+            if voltage or voltage_code: score += 1
+            results.append((score, {
+                "ok": True,
+                "brand_group": spec.get("brand_group"),
+                "family": grpvals.get("family"),
+                "unit_category": unit_category,
+                "tons": tons,
+                "voltage": voltage,
+                "voltage_code": voltage_code,
+                "raw_groups": grpvals,
+                "notes": spec.get("notes", ""),
+            }))
+        if not results:
+            return {"ok": False, "error": "No schema matched", "model": model}
+        results.sort(key=lambda x: x[0], reverse=True)
+        return results[0][1]
+
+    def decode_all(self, models: List[str]) -> List[Dict[str, Any]]:
+        return [self.decode(m) for m in models]
+
+if __name__ == "__main__":
+    import argparse, json, sys
+    ap = argparse.ArgumentParser(description="Decode HVAC packaged unit model numbers using JSON schemas.")
+    ap.add_argument("--json", default="packaged_units_nomenclature_full.json", help="Path to the JSON report file")
+    ap.add_argument("models", nargs="*", help="Model strings to decode")
+    args = ap.parse_args()
+
+    report = load_report(args.json)
+    dec = Decoder(report)
+
+    if not args.models:
+        print("Usage: python replit_decoder_loader.py --json packaged_units_nomenclature_full.json <MODEL> [<MODEL> ...]")
+        sys.exit(0)
+
+    for mdl in args.models:
+        res = dec.decode_best(mdl)
+        print(json.dumps({"model": mdl, "result": res}, indent=2))
