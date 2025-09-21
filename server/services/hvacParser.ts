@@ -100,8 +100,29 @@ function calculateConfidence(factors: Partial<ConfidenceFactors>): number {
   return Math.max(45, percentage);
 }
 
+// Manufacturer-specific voltage token maps from Python decoder
+const MANUFACTURER_VOLTAGE_MAPS = {
+  trane: {
+    "A1": "208/230", "A3": "460", "A5": "575",
+    "D1": "208/230", "D3": "460", "D5": "575",
+    "1000": "208/230", "3000": "460", "5000": "575"
+  },
+  carrier: {
+    "A": "208/230", "D": "460", "E": "575",
+    "1": "208/230", "3": "460", "5": "575"
+  },
+  lennox: {
+    "230": "208/230", "460": "460", "575": "575",
+    "H4": "208/230", "H6": "460", "V1": "208/230", "V3": "460"
+  },
+  york: {
+    "S41": "208/230", "S43": "460", "S45": "575",
+    "41": "208/230", "43": "460", "45": "575"
+  }
+};
+
 // Enhanced voltage detection with multi-strategy approach from Python decoder
-function detectVoltageFromCode(code: string, fallbackMaps?: Record<string, any>): { voltage: string; phases: string; code?: string } {
+function detectVoltageFromCode(code: string, manufacturer?: string, fallbackMaps?: Record<string, any>): { voltage: string; phases: string; code?: string } {
   if (!code) return { voltage: "208/230", phases: "1" };
   
   const upperCode = code.toUpperCase();
@@ -112,7 +133,17 @@ function detectVoltageFromCode(code: string, fallbackMaps?: Record<string, any>)
     return { voltage: mapping.voltage, phases: mapping.phases, code: upperCode };
   }
   
-  // Secondary: Check fallback maps (manufacturer-specific)
+  // Secondary: Manufacturer-specific voltage maps
+  if (manufacturer) {
+    const mfgMap = MANUFACTURER_VOLTAGE_MAPS[manufacturer.toLowerCase() as keyof typeof MANUFACTURER_VOLTAGE_MAPS];
+    if (mfgMap && (mfgMap as Record<string, string>)[upperCode]) {
+      const voltage = (mfgMap as Record<string, string>)[upperCode];
+      const phases = voltage.includes("460") || voltage.includes("575") ? "3" : "1";
+      return { voltage, phases, code: upperCode };
+    }
+  }
+  
+  // Tertiary: Check fallback maps (manufacturer-specific)
   if (fallbackMaps) {
     for (const mapName in fallbackMaps) {
       const map = fallbackMaps[mapName];
@@ -122,7 +153,7 @@ function detectVoltageFromCode(code: string, fallbackMaps?: Record<string, any>)
     }
   }
   
-  // Tertiary: Heuristic voltage detection
+  // Quaternary: Advanced heuristic voltage detection with suffix patterns
   if (upperCode.includes("230") || upperCode.includes("208")) {
     return { voltage: "208/230", phases: "1", code: upperCode };
   }
@@ -131,6 +162,15 @@ function detectVoltageFromCode(code: string, fallbackMaps?: Record<string, any>)
   }
   if (upperCode.includes("575")) {
     return { voltage: "575", phases: "3", code: upperCode };
+  }
+  
+  // Pattern-based voltage detection (e.g., -230, -460, -575 suffixes)
+  const voltageMatch = upperCode.match(/(\d{3})$/);
+  if (voltageMatch) {
+    const voltCode = voltageMatch[1];
+    if (voltCode === "230") return { voltage: "208/230", phases: "1", code: upperCode };
+    if (voltCode === "460") return { voltage: "460", phases: "3", code: upperCode };
+    if (voltCode === "575") return { voltage: "575", phases: "3", code: upperCode };
   }
   
   // Default fallback
@@ -188,20 +228,24 @@ function inferUnitCategory(modelNumber: string, familyCode?: string, typeCode?: 
     
     // Heat pump families (TTR removed - TTR is Straight A/C)
     if (upperFamily.includes("HP") || upperFamily.includes("TC") || upperFamily.includes("GSZ") || 
-        upperFamily.includes("TWR") || upperFamily.includes("RP")) {
+        upperFamily.includes("TWR") || upperFamily.includes("RP") || upperFamily.includes("YHJ") ||
+        upperFamily.includes("LSN") || upperFamily.includes("MSZ") || upperFamily.includes("PLA")) {
       return "Heat Pump";
     }
     
     // Gas/Electric families  
     if (upperFamily.includes("HC") || upperFamily.includes("HD") || upperFamily.includes("GPC") || 
-        upperFamily.includes("GMT") || upperFamily.includes("GKC") || upperFamily.includes("TUD")) {
+        upperFamily.includes("GMT") || upperFamily.includes("GKC") || upperFamily.includes("TUD") ||
+        upperFamily.includes("YMG") || upperFamily.includes("STA") || upperFamily.includes("GAS")) {
       return "Gas/Electric";
     }
     
     // Straight A/C families (Added TTR, TTA, TSC)
     if (upperFamily.includes("AC") || upperFamily.includes("GSC") || upperFamily.includes("GSX") || 
         upperFamily.includes("DSX") || upperFamily.includes("TSC") || upperFamily.includes("TTR") || 
-        upperFamily.includes("TTA")) {
+        upperFamily.includes("TTA") || upperFamily.includes("YCJ") || upperFamily.includes("YCJF") ||
+        upperFamily.includes("LSU") || upperFamily.includes("LSA") || upperFamily.includes("MUZ") ||
+        upperFamily.includes("MLZ") || upperFamily.includes("CKC") || upperFamily.includes("FB")) {
       return "Straight A/C";
     }
   }
@@ -294,7 +338,9 @@ const BTU_MAPPINGS: Record<string, Record<string, number>> = {
     "09": 9000, "009": 9000, "12": 12000, "012": 12000, "18": 18000, "018": 18000, 
     "24": 24000, "024": 24000, "30": 30000, "030": 30000, "36": 36000, "036": 36000,
     "42": 42000, "042": 42000, "48": 48000, "048": 48000, "60": 60000, "060": 60000, 
-    "72": 72000, "072": 72000, "90": 90000, "090": 90000, "120": 120000, "180": 180000, "240": 240000
+    "72": 72000, "072": 72000, "90": 90000, "090": 90000, 
+    // Fixed: 120 is 1 ton (12,000 BTU) in minisplit terminology, not 10 tons
+    "120": 12000, "180": 18000, "240": 24000
   },
   // Daikin R-32 commercial package units - uses 3-digit capacity codes
   daikin_r32: {
@@ -579,8 +625,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       // Enhanced system type detection using smart inference
       const systemType = inferUnitCategory(modelNumber, family);
 
-      // Use universal voltage detection
-      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+      // Use enhanced voltage detection with manufacturer-specific maps
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken, "trane") : { voltage: "208/230", phases: "1" };
 
       // Calculate confidence using multi-criteria scoring
       const confidence = calculateConfidence({
@@ -609,28 +655,65 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "York",
     patterns: [
-      /^(YCJ|YHJ|YMG|YCJF|YHJF)([0-9]{2,3})[A-Z0-9]*$/i, // YCJF36S41S2, YHJF48S41S3 - York specific prefixes only
-      /^([0-9]{2})(YCJ|YHJ|YMG)([0-9]{2,3})[A-Z0-9]*$/i // York specific prefixes only
+      // Enhanced pattern for family + capacity + voltage (e.g., YCJF36S41S2)
+      /^([A-Z]{3,4})([0-9]{2,3})([A-Z][0-9]+[A-Z0-9]*)$/i,
+      // Legacy patterns for compatibility
+      /^(YCJ|YHJ|YMG|YCJF|YHJF)([0-9]{2,3})[A-Z0-9]*$/i,
+      /^([0-9]{2})(YCJ|YHJ|YMG)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.york[sizeCode];
+      let sizeCode: string;
+      let family: string | undefined;
+      let voltageToken: string | undefined;
+      
+      // Enhanced parsing for new pattern
+      if (match[1] && match[2] && match[3] && match[1].match(/^[A-Z]{3,4}$/)) {
+        family = match[1];
+        sizeCode = match[2];
+        voltageToken = match[3];
+      } else {
+        sizeCode = match[2] || match[1];
+        // Try to extract family from model number
+        const familyMatch = modelNumber.match(/^([A-Z]{3,4})/);
+        if (familyMatch) family = familyMatch[1];
+      }
+
+      // Try enhanced BTU mapping first, then smart tonnage derivation
+      let btuCapacity = BTU_MAPPINGS.york[sizeCode];
+      if (!btuCapacity) {
+        const smartTonnage = smartTonnageFromCode(sizeCode);
+        if (smartTonnage) {
+          btuCapacity = smartTonnage * 12000;
+        }
+      }
       if (!btuCapacity) return null;
 
-      const systemType = modelNumber.includes("YCJ") || modelNumber.includes("YHJ") ? "Heat Pump" :
-                        modelNumber.includes("YMG") ? "Gas/Electric" : "Straight A/C";
+      // Enhanced system type detection using smart inference
+      const systemType = inferUnitCategory(modelNumber, family);
+
+      // Use universal voltage detection
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+
+      // Calculate confidence using multi-criteria scoring
+      const confidence = calculateConfidence({
+        patternMatch: family && voltageToken ? 85 : (family ? 75 : 70),
+        btuCapacity: btuCapacity ? 85 : 0,
+        systemType: systemType !== "Straight A/C" ? 80 : 70,
+        voltage: voltageToken ? 80 : 55
+      });
 
       return {
         manufacturer: "York",
-        confidence: 92,
-        systemType: systemType as any,
+        confidence,
+        systemType,
         btuCapacity,
-        voltage: "208-230", 
-        phases: "1",
+        voltage: voltageInfo.voltage,
+        phases: voltageInfo.phases,
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "73", unit: "dB" }
+          { label: "Sound Level", value: "73", unit: "dB" },
+          ...(family ? [{ label: "Family", value: family }] : [])
         ]
       };
     }
