@@ -13,6 +13,89 @@ interface LearningContext {
   sessionId?: string;
 }
 
+// Comprehensive voltage detection mappings from JSON schema
+interface VoltageMapping {
+  [key: string]: {
+    voltage: string;
+    phases: string;
+    frequency: string;
+  };
+}
+
+const UNIVERSAL_VOLTAGE_MAPPINGS: VoltageMapping = {
+  // Standard single-phase voltage codes
+  "A": { voltage: "208/230", phases: "1", frequency: "60" },
+  "A1": { voltage: "208/230", phases: "1", frequency: "60" },
+  "B": { voltage: "208/230", phases: "1", frequency: "60" },
+  "B1": { voltage: "208/230", phases: "1", frequency: "60" },
+  "C": { voltage: "208/230", phases: "1", frequency: "60" },
+  "C1": { voltage: "208/230", phases: "1", frequency: "60" },
+  "1": { voltage: "208/230", phases: "1", frequency: "60" },
+
+  // Three-phase 208/230V codes
+  "A3": { voltage: "208/230", phases: "3", frequency: "60" },
+  "B3": { voltage: "208/230", phases: "3", frequency: "60" },
+  "C3": { voltage: "208/230", phases: "3", frequency: "60" },
+  "3": { voltage: "208/230", phases: "3", frequency: "60" },
+
+  // High voltage three-phase codes
+  "A4": { voltage: "460", phases: "3", frequency: "60" },
+  "B4": { voltage: "460", phases: "3", frequency: "60" },
+  "C4": { voltage: "460", phases: "3", frequency: "60" },
+  "D": { voltage: "460", phases: "3", frequency: "60" },
+  "4": { voltage: "460", phases: "3", frequency: "60" },
+
+  // Extra high voltage codes
+  "A5": { voltage: "575", phases: "3", frequency: "60" },
+  "B5": { voltage: "575", phases: "3", frequency: "60" },
+  "C5": { voltage: "575", phases: "3", frequency: "60" },
+  "E": { voltage: "575", phases: "3", frequency: "60" },
+  "5": { voltage: "575", phases: "3", frequency: "60" },
+
+  // Specialty codes
+  "H": { voltage: "208", phases: "3", frequency: "60" },
+  "J": { voltage: "230", phases: "1", frequency: "60" },
+  "K": { voltage: "200", phases: "3", frequency: "60" },
+  "L": { voltage: "380", phases: "3", frequency: "50" },
+  "M": { voltage: "415", phases: "3", frequency: "50" }
+};
+
+// Multi-criteria confidence scoring system
+interface ConfidenceFactors {
+  patternMatch: number;    // Base pattern recognition (40%)
+  btuCapacity: number;     // BTU capacity identified (25%)
+  systemType: number;      // System type identified (20%)
+  voltage: number;         // Voltage/phases identified (15%)
+}
+
+function calculateConfidence(factors: Partial<ConfidenceFactors>): number {
+  const weights = {
+    patternMatch: 0.40,
+    btuCapacity: 0.25,
+    systemType: 0.20,
+    voltage: 0.15
+  };
+
+  let totalScore = 0;
+  let totalWeight = 0;
+
+  for (const [factor, score] of Object.entries(factors)) {
+    if (score !== undefined && factor in weights) {
+      totalScore += score * weights[factor as keyof typeof weights];
+      totalWeight += weights[factor as keyof typeof weights];
+    }
+  }
+
+  return totalWeight > 0 ? Math.round(totalScore / totalWeight) : 50;
+}
+
+function detectVoltageFromCode(code: string): { voltage: string; phases: string } {
+  const mapping = UNIVERSAL_VOLTAGE_MAPPINGS[code.toUpperCase()];
+  return mapping 
+    ? { voltage: mapping.voltage, phases: mapping.phases }
+    : { voltage: "208/230", phases: "1" }; // Default fallback
+}
+
 // BTU capacity lookup tables for ALL major HVAC manufacturers
 const BTU_MAPPINGS: Record<string, Record<string, number>> = {
   // Carrier/Bryant/Payne/ICP brands sizing codes
@@ -225,9 +308,10 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "Carrier",
     patterns: [
-      // Enhanced pattern based on JSON schema - supports 48/50 families with wildcard handling
-      /^((?:48|50)[A-Z]{2})[A-Z0-9\-\*]*?(0?(07|08|09|12|14|16|24|30|36|48|60))[A-Z0-9\-\*]*?([1-4A-Z])$/i,
-      /^(50|38)(TC|HD|HV|TQ)([0-9]{2,4})[A-Z0-9]*$/i, // Legacy pattern for compatibility
+      // Enhanced pattern: family + size + voltage code (e.g., 48HC048A1, 50TC036A1)
+      /^((?:48|50)[A-Z]{2})([0-9]{3})([A-Z][0-9])$/i,
+      // Legacy patterns for compatibility
+      /^(50|38)(TC|HD|HV|TQ)([0-9]{2,4})[A-Z0-9]*$/i,
       /^([0-9]{2})(TC|HD|HV|TQ)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
@@ -236,23 +320,24 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       let voltageToken: string | undefined;
       
       // Enhanced parsing for new pattern
-      if (match[2] && match[4]) {
+      if (match[1] && match[2] && match[3] && match[1].match(/^(?:48|50)[A-Z]{2}$/)) {
         family = match[1];
-        sizeCode = match[3] || match[2];
-        voltageToken = match[4];
+        sizeCode = match[2]; // 3-digit size code like "048"
+        voltageToken = match[3];
       } else {
         sizeCode = match[3] || match[2];
       }
 
       // Enhanced BTU mapping including commercial sizes
       const carrierBTUMapping: Record<string, number> = {
-        // Residential package units
-        "24": 24000, "30": 30000, "36": 36000, "48": 48000, "60": 60000,
-        // Commercial sizes from JSON schema
-        "07": 90000, "007": 90000, "08": 90000, "008": 90000, "09": 102000, "009": 102000,
-        "12": 120000, "012": 120000, "14": 150000, "014": 150000, "16": 180000, "016": 180000,
-        // Legacy codes
-        "018": 18000, "024": 24000, "042": 42000, "072": 72000, "090": 90000, "120": 120000
+        // Residential package units (handle both 2 and 3 digit formats)
+        "24": 24000, "024": 24000, "30": 30000, "030": 30000, 
+        "36": 36000, "036": 36000, "48": 48000, "048": 48000, 
+        "60": 60000, "060": 60000,
+        // Commercial sizes from JSON schema  
+        "18": 18000, "018": 18000, "42": 42000, "042": 42000,
+        "72": 72000, "072": 72000, "90": 90000, "090": 90000, 
+        "120": 120000, "12": 120000, "012": 120000
       };
 
       const btuCapacity = carrierBTUMapping[sizeCode] || BTU_MAPPINGS.carrier[sizeCode];
@@ -272,25 +357,24 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
                      modelNumber.includes("HD") ? "Gas/Electric" : "Straight A/C";
       }
 
-      // Enhanced voltage detection from JSON schema
-      const voltageMapping: Record<string, string> = {
-        "A": "208/230-1-60", "D": "460-3-60", "E": "575-3-60",
-        "1": "208/230-1-60", "3": "208/230-3-60", "4": "460-3-60"
-      };
-      
-      const voltage = voltageToken ? voltageMapping[voltageToken] || "208/230-1-60" : "208/230-1-60";
-      const phases = voltage.includes("-3-") ? "3" : "1";
+      // Use universal voltage detection
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
 
-      // Higher confidence for enhanced pattern matching
-      const confidence = family && voltageToken ? 95 : 90;
+      // Calculate confidence using multi-criteria scoring
+      const confidence = calculateConfidence({
+        patternMatch: family && voltageToken ? 95 : (family ? 85 : 75),
+        btuCapacity: btuCapacity ? 90 : 0,
+        systemType: systemType !== "Straight A/C" ? 85 : 70,
+        voltage: voltageToken ? 90 : 60
+      });
 
       return {
         manufacturer: "Carrier",
         confidence,
         systemType,
         btuCapacity,
-        voltage: voltage.split("-")[0] + "-" + voltage.split("-")[1],
-        phases,
+        voltage: voltageInfo.voltage,
+        phases: voltageInfo.phases,
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
@@ -421,28 +505,106 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "Goodman",
     patterns: [
-      /^([A-Z]{3,4})([0-9]{2,3})[A-Z0-9]*$/i, // GSZ160361, DSXC180361
+      // Enhanced pattern for complex models (e.g., GSZ160361A1)
+      /^([A-Z]{3,4})([0-9]+)([A-Z][0-9])$/i,
+      // Legacy patterns for compatibility
+      /^([A-Z]{3,4})([0-9]{2,3})[A-Z0-9]*$/i,
       /^([0-9]{2})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.goodman[sizeCode];
+      let sizeCode: string;
+      let familyCode: string | undefined;
+      let voltageCode: string | undefined;
+      
+      // Enhanced parsing for new pattern (GSZ160361A1)
+      if (match[1] && match[2] && match[3] && match[2].length >= 4) {
+        familyCode = match[1]; // GSZ
+        const fullNumber = match[2]; // 160361
+        voltageCode = match[3]; // A1
+        
+        // Extract size from full number - look for embedded tonnage patterns
+        const sizeMatch = fullNumber.match(/(0?(18|24|30|36|42|48|60|72|90))/);
+        sizeCode = sizeMatch ? sizeMatch[2] : fullNumber.substring(fullNumber.length - 2);
+      } else {
+        familyCode = match[1];
+        sizeCode = match[2] || match[1];
+      }
+      
+      // Enhanced size code handling from JSON schema
+      if (sizeCode && sizeCode.length >= 4) {
+        // Handle formats like "160361" -> "36", "144808" -> "48"
+        const extractedSize = sizeCode.substring(2, 4);
+        if (["18", "24", "30", "36", "42", "48", "60"].includes(extractedSize)) {
+          sizeCode = extractedSize;
+        } else if (sizeCode.length === 6) {
+          // Try first two digits for commercial units
+          const commercialSize = sizeCode.substring(0, 2);
+          if (["07", "08", "09", "10", "12", "14", "15", "16", "20"].includes(commercialSize)) {
+            sizeCode = commercialSize;
+          } else {
+            sizeCode = sizeCode.substring(0, 2);
+          }
+        }
+      }
+      
+      // Enhanced BTU mapping including commercial sizes
+      const goodmanBTUMapping: Record<string, number> = {
+        // Residential units
+        "18": 18000, "24": 24000, "30": 30000, "36": 36000, "42": 42000, "48": 48000, "60": 60000,
+        // Commercial units from JSON schema
+        "07": 90000, "08": 96000, "09": 102000, "10": 120000, "12": 144000, 
+        "14": 168000, "15": 180000, "16": 192000, "20": 240000,
+        // Legacy mappings
+        "072": 72000, "090": 90000, "120": 120000
+      };
+
+      const btuCapacity = goodmanBTUMapping[sizeCode] || BTU_MAPPINGS.goodman[sizeCode];
       if (!btuCapacity) return null;
 
-      const systemType = modelNumber.includes("GSZ") || modelNumber.includes("DSX") ? "Heat Pump" :
-                        modelNumber.includes("GME") ? "Gas/Electric" : "Straight A/C";
+      // Enhanced system type detection with family codes
+      let systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C" = "Straight A/C";
+      if (familyCode) {
+        // Heat pumps: GSZ, GPH, GSH
+        if (familyCode.includes("GSZ") || familyCode.includes("GPH") || familyCode.includes("GSH")) {
+          systemType = "Heat Pump";
+        }
+        // Gas/Electric: GPC, GMT, GKC
+        else if (familyCode.includes("GPC") || familyCode.includes("GMT") || familyCode.includes("GKC")) {
+          systemType = "Gas/Electric";
+        }
+        // AC units: GSC, GSX, DSX
+        else if (familyCode.includes("GSC") || familyCode.includes("GSX") || familyCode.includes("DSX")) {
+          systemType = "Straight A/C";
+        }
+        // Fallback for legacy detection
+        else if (familyCode.includes("GME")) {
+          systemType = "Gas/Electric";
+        }
+      }
+
+      // Use universal voltage detection
+      const voltageInfo = voltageCode ? detectVoltageFromCode(voltageCode) : { voltage: "208/230", phases: "1" };
+
+      // Calculate confidence using multi-criteria scoring
+      const confidence = calculateConfidence({
+        patternMatch: familyCode && voltageCode ? 90 : (familyCode ? 80 : 70),
+        btuCapacity: btuCapacity ? 85 : 0,
+        systemType: systemType !== "Straight A/C" ? 80 : 65,
+        voltage: voltageCode ? 85 : 60
+      });
 
       return {
         manufacturer: "Goodman",
-        confidence: 78,
-        systemType: systemType as any,
+        confidence,
+        systemType,
         btuCapacity,
-        voltage: "208-230",
-        phases: "1",
+        voltage: voltageInfo.voltage,
+        phases: voltageInfo.phases,
         specifications: [
-          { label: "SEER2 Rating", value: "14.0" },
+          { label: "SEER2 Rating", value: "15.5" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "75", unit: "dB" }
+          { label: "Sound Level", value: "74", unit: "dB" },
+          ...(familyCode ? [{ label: "Family", value: familyCode }] : [])
         ]
       };
     }
