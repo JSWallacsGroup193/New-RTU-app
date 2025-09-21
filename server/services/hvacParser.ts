@@ -96,8 +96,8 @@ function calculateConfidence(factors: Partial<ConfidenceFactors>): number {
   // Convert to percentage (max possible score is ~8)
   const percentage = Math.min(100, Math.round((score / 8) * 100));
   
-  // Ensure minimum confidence for any successful parse
-  return Math.max(60, percentage);
+  // Ensure minimum confidence for any successful parse (lowered from 60% to reflect uncertainty better)
+  return Math.max(45, percentage);
 }
 
 // Enhanced voltage detection with multi-strategy approach from Python decoder
@@ -186,9 +186,9 @@ function inferUnitCategory(modelNumber: string, familyCode?: string, typeCode?: 
   if (familyCode) {
     const upperFamily = familyCode.toUpperCase();
     
-    // Heat pump families
+    // Heat pump families (TTR removed - TTR is Straight A/C)
     if (upperFamily.includes("HP") || upperFamily.includes("TC") || upperFamily.includes("GSZ") || 
-        upperFamily.includes("TTR") || upperFamily.includes("TWR") || upperFamily.includes("RP")) {
+        upperFamily.includes("TWR") || upperFamily.includes("RP")) {
       return "Heat Pump";
     }
     
@@ -198,9 +198,10 @@ function inferUnitCategory(modelNumber: string, familyCode?: string, typeCode?: 
       return "Gas/Electric";
     }
     
-    // Straight A/C families
+    // Straight A/C families (Added TTR, TTA, TSC)
     if (upperFamily.includes("AC") || upperFamily.includes("GSC") || upperFamily.includes("GSX") || 
-        upperFamily.includes("DSX") || upperFamily.includes("TSC")) {
+        upperFamily.includes("DSX") || upperFamily.includes("TSC") || upperFamily.includes("TTR") || 
+        upperFamily.includes("TTA")) {
       return "Straight A/C";
     }
   }
@@ -521,8 +522,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       const btuCapacity = BTU_MAPPINGS.trane[sizeCode];
       if (!btuCapacity) return null;
       
-      const systemType = modelNumber.includes("TTR") || modelNumber.includes("TUR") ? "Heat Pump" :
-                        modelNumber.includes("TUD") || modelNumber.includes("TTD") ? "Gas/Electric" : "Straight A/C";
+      // Enhanced system type detection using smart inference
+      const systemType = inferUnitCategory(modelNumber);
       
       return {
         manufacturer: "American Standard",
@@ -542,28 +543,65 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "Trane",
     patterns: [
-      /^([0-9]{3})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i, // 4TTR6036, 2TWR2036
-      /^(TWR|TTR|TSC|TTA|TEM)([0-9]{2,3})[A-Z0-9]*$/i // TWR036A1000AA - Trane specific prefixes, not TUR/TTD
+      // Enhanced pattern for family + capacity + voltage (e.g., TWR036A1000AA)
+      /^([A-Z]{3,4})([0-9]{2,3})([A-Z][0-9]+)[A-Z]*$/i,
+      // Legacy patterns for compatibility
+      /^([0-9]{3})[A-Z]{2,4}([0-9]{2,3})[A-Z0-9]*$/i,
+      /^(TWR|TTR|TSC|TTA|TEM)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.trane[sizeCode];
+      let sizeCode: string;
+      let family: string | undefined;
+      let voltageToken: string | undefined;
+      
+      // Enhanced parsing for new pattern
+      if (match[1] && match[2] && match[3] && match[1].match(/^[A-Z]{3,4}$/)) {
+        family = match[1];
+        sizeCode = match[2];
+        voltageToken = match[3];
+      } else {
+        sizeCode = match[2] || match[1];
+        // Try to extract family from model number
+        const familyMatch = modelNumber.match(/^([A-Z]{3,4})/);
+        if (familyMatch) family = familyMatch[1];
+      }
+
+      // Try enhanced BTU mapping first, then smart tonnage derivation
+      let btuCapacity = BTU_MAPPINGS.trane[sizeCode];
+      if (!btuCapacity) {
+        const smartTonnage = smartTonnageFromCode(sizeCode);
+        if (smartTonnage) {
+          btuCapacity = smartTonnage * 12000;
+        }
+      }
       if (!btuCapacity) return null;
 
-      const systemType = modelNumber.includes("TTR") || modelNumber.includes("TWR") ? "Heat Pump" :
-                        modelNumber.includes("TUD") ? "Gas/Electric" : "Straight A/C";
+      // Enhanced system type detection using smart inference
+      const systemType = inferUnitCategory(modelNumber, family);
+
+      // Use universal voltage detection
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+
+      // Calculate confidence using multi-criteria scoring
+      const confidence = calculateConfidence({
+        patternMatch: family && voltageToken ? 90 : (family ? 80 : 75),
+        btuCapacity: btuCapacity ? 85 : 0,
+        systemType: systemType !== "Straight A/C" ? 80 : 70,
+        voltage: voltageToken ? 85 : 60
+      });
 
       return {
         manufacturer: "Trane",
-        confidence: 88,
-        systemType: systemType as any,
+        confidence,
+        systemType,
         btuCapacity,
-        voltage: "208-230",
-        phases: "1",
+        voltage: voltageInfo.voltage,
+        phases: voltageInfo.phases,
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "71", unit: "dB" }
+          { label: "Sound Level", value: "71", unit: "dB" },
+          ...(family ? [{ label: "Family", value: family }] : [])
         ]
       };
     }
@@ -600,28 +638,65 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
   {
     name: "Lennox",
     patterns: [
-      /^(XP|EL|SL|ML|HS|CH|CBX|ELX|HP)([0-9]{2,3})[A-Z0-9\-]*$/i, // XP16-036-230, HP21-048-230 - Lennox specific prefixes
+      // Enhanced pattern for family + series + capacity + voltage (e.g., XP16-036-230, HP21-048-460)
+      /^([A-Z]{2,4})([0-9]{2})[\-]([0-9]{2,3})[\-]([0-9]{3})$/i,
+      // Legacy patterns for compatibility 
+      /^(XP|EL|SL|ML|HS|CH|CBX|ELX|HP)([0-9]{2,3})[A-Z0-9\-]*$/i,
       /^([0-9]{2})(XP|EL|SL|ML|HS|CH|CBX|ELX|HP)([0-9]{2,3})[A-Z0-9]*$/i
     ],
     parser: (modelNumber, match) => {
-      const sizeCode = match[2] || match[1];
-      const btuCapacity = BTU_MAPPINGS.lennox[sizeCode];
+      let sizeCode: string;
+      let family: string | undefined;
+      let voltageToken: string | undefined;
+      
+      // Enhanced parsing for new pattern (family-series-capacity-voltage)
+      if (match[1] && match[2] && match[3] && match[4]) {
+        family = match[1];
+        sizeCode = match[3]; // Capacity is in the 3rd group
+        voltageToken = match[4]; // Voltage is in the 4th group
+      } else {
+        sizeCode = match[2] || match[1];
+        // Try to extract family from legacy patterns
+        const familyMatch = modelNumber.match(/([A-Z]{2,4})/);
+        if (familyMatch) family = familyMatch[1];
+      }
+
+      // Try enhanced BTU mapping first, then smart tonnage derivation
+      let btuCapacity = BTU_MAPPINGS.lennox[sizeCode];
+      if (!btuCapacity) {
+        const smartTonnage = smartTonnageFromCode(sizeCode);
+        if (smartTonnage) {
+          btuCapacity = smartTonnage * 12000;
+        }
+      }
       if (!btuCapacity) return null;
 
-      const systemType = modelNumber.includes("XP") || modelNumber.includes("HP") ? "Heat Pump" :
-                        modelNumber.includes("GM") ? "Gas/Electric" : "Straight A/C";
+      // Enhanced system type detection using smart inference
+      const systemType = inferUnitCategory(modelNumber, family);
+
+      // Use universal voltage detection
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+
+      // Calculate confidence using multi-criteria scoring
+      const confidence = calculateConfidence({
+        patternMatch: family && voltageToken ? 88 : (family ? 78 : 72),
+        btuCapacity: btuCapacity ? 85 : 0,
+        systemType: systemType !== "Straight A/C" ? 80 : 70,
+        voltage: voltageToken ? 80 : 55
+      });
 
       return {
         manufacturer: "Lennox",
-        confidence: 85,
-        systemType: systemType as any,
+        confidence,
+        systemType,
         btuCapacity,
-        voltage: "208-230",
-        phases: "1", 
+        voltage: voltageInfo.voltage,
+        phases: voltageInfo.phases,
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
           { label: "Refrigerant", value: "R-410A" },
-          { label: "Sound Level", value: "74", unit: "dB" }
+          { label: "Sound Level", value: "74", unit: "dB" },
+          ...(family ? [{ label: "Family", value: family }] : [])
         ]
       };
     }
