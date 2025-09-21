@@ -68,32 +68,160 @@ interface ConfidenceFactors {
   voltage: number;         // Voltage/phases identified (15%)
 }
 
+// Enhanced confidence scoring using Python decoder approach
 function calculateConfidence(factors: Partial<ConfidenceFactors>): number {
-  const weights = {
-    patternMatch: 0.40,
-    btuCapacity: 0.25,
-    systemType: 0.20,
-    voltage: 0.15
-  };
-
-  let totalScore = 0;
-  let totalWeight = 0;
-
-  for (const [factor, score] of Object.entries(factors)) {
-    if (score !== undefined && factor in weights) {
-      totalScore += score * weights[factor as keyof typeof weights];
-      totalWeight += weights[factor as keyof typeof weights];
-    }
+  // Base scoring like Python decoder: category +1, tonnage +2, voltage +1
+  let score = 0;
+  
+  // Pattern match quality (40% weight)
+  if (factors.patternMatch !== undefined) {
+    score += (factors.patternMatch / 100) * 4; // Max 4 points
   }
-
-  return totalWeight > 0 ? Math.round(totalScore / totalWeight) : 50;
+  
+  // BTU capacity resolution (25% weight, +2 like Python)
+  if (factors.btuCapacity !== undefined && factors.btuCapacity > 0) {
+    score += 2;
+  }
+  
+  // System type inference (20% weight, +1 like Python)
+  if (factors.systemType !== undefined && factors.systemType > 0) {
+    score += 1;
+  }
+  
+  // Voltage detection (15% weight, +1 like Python)
+  if (factors.voltage !== undefined && factors.voltage > 0) {
+    score += 1;
+  }
+  
+  // Convert to percentage (max possible score is ~8)
+  const percentage = Math.min(100, Math.round((score / 8) * 100));
+  
+  // Ensure minimum confidence for any successful parse
+  return Math.max(60, percentage);
 }
 
-function detectVoltageFromCode(code: string): { voltage: string; phases: string } {
-  const mapping = UNIVERSAL_VOLTAGE_MAPPINGS[code.toUpperCase()];
-  return mapping 
-    ? { voltage: mapping.voltage, phases: mapping.phases }
-    : { voltage: "208/230", phases: "1" }; // Default fallback
+// Enhanced voltage detection with multi-strategy approach from Python decoder
+function detectVoltageFromCode(code: string, fallbackMaps?: Record<string, any>): { voltage: string; phases: string; code?: string } {
+  if (!code) return { voltage: "208/230", phases: "1" };
+  
+  const upperCode = code.toUpperCase();
+  
+  // Primary: Universal voltage mapping
+  const mapping = UNIVERSAL_VOLTAGE_MAPPINGS[upperCode];
+  if (mapping) {
+    return { voltage: mapping.voltage, phases: mapping.phases, code: upperCode };
+  }
+  
+  // Secondary: Check fallback maps (manufacturer-specific)
+  if (fallbackMaps) {
+    for (const mapName in fallbackMaps) {
+      const map = fallbackMaps[mapName];
+      if (typeof map === 'object' && map[upperCode]) {
+        return { voltage: map[upperCode], phases: "1", code: upperCode }; // Default to single phase
+      }
+    }
+  }
+  
+  // Tertiary: Heuristic voltage detection
+  if (upperCode.includes("230") || upperCode.includes("208")) {
+    return { voltage: "208/230", phases: "1", code: upperCode };
+  }
+  if (upperCode.includes("460")) {
+    return { voltage: "460", phases: "3", code: upperCode };
+  }
+  if (upperCode.includes("575")) {
+    return { voltage: "575", phases: "3", code: upperCode };
+  }
+  
+  // Default fallback
+  return { voltage: "208/230", phases: "1" };
+}
+
+// Smart tonnage derivation algorithm from Python decoder
+function smartTonnageFromCode(code: string | null): number | null {
+  if (!code) return null;
+  
+  try {
+    // Extract only digits from the code
+    const digits = code.replace(/[^0-9]/g, '');
+    if (!digits) return null;
+    
+    const numericValue = parseInt(digits, 10);
+    
+    // Handle different digit lengths with specific logic
+    switch (digits.length) {
+      case 2: {
+        // 2-digit codes: divide by 12 (e.g., 72 → 6.0 tons)
+        return Math.round((numericValue / 12) * 1000) / 1000;
+      }
+      
+      case 3: {
+        // 3-digit codes with special handling
+        if (digits.endsWith("90")) {
+          return 7.5; // 090 → 7.5 tons (exact)
+        }
+        return Math.round((numericValue / 12) * 1000) / 1000;
+      }
+      
+      case 4:
+      case 5:
+      case 6: {
+        // Treat as BTU values (e.g., 36000 → 3.0 tons)
+        return Math.round((numericValue / 12000) * 1000) / 1000;
+      }
+      
+      default:
+        return null;
+    }
+  } catch (error) {
+    return null;
+  }
+}
+
+// Enhanced unit category inference with multiple heuristics
+function inferUnitCategory(modelNumber: string, familyCode?: string, typeCode?: string): "Heat Pump" | "Gas/Electric" | "Straight A/C" {
+  const upperModel = modelNumber.toUpperCase();
+  
+  // Family-based detection (most reliable)
+  if (familyCode) {
+    const upperFamily = familyCode.toUpperCase();
+    
+    // Heat pump families
+    if (upperFamily.includes("HP") || upperFamily.includes("TC") || upperFamily.includes("GSZ") || 
+        upperFamily.includes("TTR") || upperFamily.includes("TWR") || upperFamily.includes("RP")) {
+      return "Heat Pump";
+    }
+    
+    // Gas/Electric families  
+    if (upperFamily.includes("HC") || upperFamily.includes("HD") || upperFamily.includes("GPC") || 
+        upperFamily.includes("GMT") || upperFamily.includes("GKC") || upperFamily.includes("TUD")) {
+      return "Gas/Electric";
+    }
+    
+    // Straight A/C families
+    if (upperFamily.includes("AC") || upperFamily.includes("GSC") || upperFamily.includes("GSX") || 
+        upperFamily.includes("DSX") || upperFamily.includes("TSC")) {
+      return "Straight A/C";
+    }
+  }
+  
+  // Type character heuristics (C=A/C, H=Heat Pump, G=Gas/Electric, D=Dual Fuel)
+  if (typeCode) {
+    const upperType = typeCode.toUpperCase();
+    switch (upperType) {
+      case "C": return "Straight A/C";
+      case "H": return "Heat Pump";
+      case "G": return "Gas/Electric";
+      case "D": return "Gas/Electric"; // Dual fuel treated as Gas/Electric
+    }
+  }
+  
+  // Model number pattern fallbacks
+  if (upperModel.includes("HP") || upperModel.includes("HEATPUMP")) return "Heat Pump";
+  if (upperModel.includes("GAS") || upperModel.includes("FURNACE")) return "Gas/Electric";
+  
+  // Default to straight A/C
+  return "Straight A/C";
 }
 
 // BTU capacity lookup tables for ALL major HVAC manufacturers
@@ -340,22 +468,18 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         "120": 120000, "12": 120000, "012": 120000
       };
 
-      const btuCapacity = carrierBTUMapping[sizeCode] || BTU_MAPPINGS.carrier[sizeCode];
+      // Try enhanced BTU mapping first, then smart tonnage derivation
+      let btuCapacity = carrierBTUMapping[sizeCode] || BTU_MAPPINGS.carrier[sizeCode];
+      if (!btuCapacity) {
+        const smartTonnage = smartTonnageFromCode(sizeCode);
+        if (smartTonnage) {
+          btuCapacity = smartTonnage * 12000;
+        }
+      }
       if (!btuCapacity) return null;
 
-      // Enhanced system type detection using family codes
-      let systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C" = "Straight A/C";
-      if (family) {
-        if (family.includes("48HC") || family.includes("48TC") || family.includes("48TJ")) {
-          systemType = "Gas/Electric";
-        } else if (family.includes("50HC") || family.includes("50TC") || family.includes("50TJ")) {
-          systemType = "Heat Pump"; // 50 series can be HP or AC, defaulting to HP
-        }
-      } else {
-        // Fallback to legacy detection
-        systemType = modelNumber.includes("TC") ? "Heat Pump" :
-                     modelNumber.includes("HD") ? "Gas/Electric" : "Straight A/C";
-      }
+      // Enhanced system type detection using smart inference
+      const systemType = inferUnitCategory(modelNumber, family);
 
       // Use universal voltage detection
       const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
@@ -558,29 +682,18 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         "072": 72000, "090": 90000, "120": 120000
       };
 
-      const btuCapacity = goodmanBTUMapping[sizeCode] || BTU_MAPPINGS.goodman[sizeCode];
-      if (!btuCapacity) return null;
-
-      // Enhanced system type detection with family codes
-      let systemType: "Heat Pump" | "Gas/Electric" | "Straight A/C" = "Straight A/C";
-      if (familyCode) {
-        // Heat pumps: GSZ, GPH, GSH
-        if (familyCode.includes("GSZ") || familyCode.includes("GPH") || familyCode.includes("GSH")) {
-          systemType = "Heat Pump";
-        }
-        // Gas/Electric: GPC, GMT, GKC
-        else if (familyCode.includes("GPC") || familyCode.includes("GMT") || familyCode.includes("GKC")) {
-          systemType = "Gas/Electric";
-        }
-        // AC units: GSC, GSX, DSX
-        else if (familyCode.includes("GSC") || familyCode.includes("GSX") || familyCode.includes("DSX")) {
-          systemType = "Straight A/C";
-        }
-        // Fallback for legacy detection
-        else if (familyCode.includes("GME")) {
-          systemType = "Gas/Electric";
+      // Try enhanced BTU mapping first, then smart tonnage derivation  
+      let btuCapacity = goodmanBTUMapping[sizeCode] || BTU_MAPPINGS.goodman[sizeCode];
+      if (!btuCapacity) {
+        const smartTonnage = smartTonnageFromCode(sizeCode);
+        if (smartTonnage) {
+          btuCapacity = smartTonnage * 12000;
         }
       }
+      if (!btuCapacity) return null;
+
+      // Enhanced system type detection using smart inference
+      const systemType = inferUnitCategory(modelNumber, familyCode);
 
       // Use universal voltage detection
       const voltageInfo = voltageCode ? detectVoltageFromCode(voltageCode) : { voltage: "208/230", phases: "1" };
