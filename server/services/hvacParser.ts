@@ -1632,30 +1632,53 @@ export class HVACModelParser {
   }
 
   /**
-   * Try built-in manufacturer patterns
+   * Try built-in manufacturer patterns with multi-pattern ranking (decode_best approach from Python decoder)
    */
   private tryBuiltInPatterns(modelNumber: string): ParsedModel | null {
+    const candidates: Array<{ result: ParsedModel; confidence: number; manufacturer: string }> = [];
+    
+    // Collect ALL matching patterns instead of returning the first one
     for (const manufacturerPattern of MANUFACTURER_PATTERNS) {
       for (const pattern of manufacturerPattern.patterns) {
         const match = modelNumber.match(pattern);
         if (match) {
-          const parsed = manufacturerPattern.parser(modelNumber, match);
-          if (parsed) {
-            return {
-              modelNumber,
-              manufacturer: manufacturerPattern.name,
-              confidence: parsed.confidence || 80,
-              systemType: parsed.systemType || "Straight A/C",
-              btuCapacity: parsed.btuCapacity || 0,
-              voltage: parsed.voltage || "208-230",
-              phases: parsed.phases || "1",
-              specifications: parsed.specifications || []
-            };
+          try {
+            const parsed = manufacturerPattern.parser(modelNumber, match);
+            if (parsed) {
+              const result: ParsedModel = {
+                modelNumber,
+                manufacturer: manufacturerPattern.name,
+                confidence: parsed.confidence || 80,
+                systemType: parsed.systemType || "Straight A/C",
+                btuCapacity: parsed.btuCapacity || 0,
+                voltage: parsed.voltage || "208-230",
+                phases: parsed.phases || "1",
+                specifications: parsed.specifications || []
+              };
+              
+              candidates.push({ 
+                result, 
+                confidence: result.confidence, 
+                manufacturer: manufacturerPattern.name 
+              });
+            }
+          } catch (error) {
+            console.error(`Error parsing model ${modelNumber} with pattern ${manufacturerPattern.name}:`, error);
+            continue;
           }
         }
       }
     }
-    return null;
+    
+    if (candidates.length === 0) {
+      return null;
+    }
+    
+    // Sort by confidence score (highest first) - Python decoder approach
+    candidates.sort((a, b) => b.confidence - a.confidence);
+    
+    // Return the highest confidence result
+    return candidates[0].result;
   }
 
   /**
