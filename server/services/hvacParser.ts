@@ -363,8 +363,8 @@ const BTU_MAPPINGS: Record<string, Record<string, number>> = {
 };
 
 const VOLTAGE_MAPPINGS: Record<string, string> = {
-  "A": "208-230", "B": "460", "C": "575", "4": "208-230", "5": "460", "6": "575",
-  "1": "208-230", "2": "460", "3": "575"
+  "A": "208/230", "B": "460", "C": "575", "4": "208/230", "5": "460", "6": "575",
+  "1": "208/230", "2": "460", "3": "575"
 };
 
 const PHASE_MAPPINGS: Record<string, string> = {
@@ -407,7 +407,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 88,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "19.0" },
@@ -451,7 +451,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 92,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "22.0" },
@@ -482,7 +482,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 89,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
@@ -589,7 +589,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 87,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
@@ -912,7 +912,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 91,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
@@ -942,7 +942,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 83,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -972,7 +972,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 90,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
@@ -1002,7 +1002,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 79,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230", 
+        voltage: "208/230", 
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -1032,7 +1032,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 81,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -1062,7 +1062,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 82,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -1092,7 +1092,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 80,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -1122,7 +1122,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 80,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -1152,7 +1152,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 79,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "14.0" },
@@ -1182,7 +1182,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 76,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "13.0" },
@@ -1212,7 +1212,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 77,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "13.0" },
@@ -1242,7 +1242,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 84,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "15.0" },
@@ -1272,7 +1272,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 85,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "16.0" },
@@ -1302,7 +1302,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 75,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "13.0" },
@@ -1331,7 +1331,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 88,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "19.0" },
@@ -1360,7 +1360,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 92,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "22.0" },
@@ -1395,7 +1395,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
           confidence: 85,
           systemType: systemType as any,
           btuCapacity,
-          voltage: "208-230",
+          voltage: "208/230",
           phases: "1",
           specifications: [
             { label: "SEER2 Rating", value: "20.0" },
@@ -1436,13 +1436,13 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       
       // Map voltage code (position 7) to actual voltage/phase combinations per spec sheets
       const voltagePhaseMap: Record<string, { voltage: string; phases: string }> = {
-        "1": { voltage: "208-230", phases: "1" },  // 208-230/1/60
-        "3": { voltage: "208-230", phases: "3" },  // 208-230/3/60  
+        "1": { voltage: "208/230", phases: "1" },  // 208/230/1/60
+        "3": { voltage: "208/230", phases: "3" },  // 208/230/3/60  
         "4": { voltage: "460", phases: "3" },      // 460/3/60
         "7": { voltage: "575", phases: "3" }       // 575/3/60
       };
       
-      const { voltage, phases } = voltagePhaseMap[voltageCode] || { voltage: "208-230", phases: "1" };
+      const { voltage, phases } = voltagePhaseMap[voltageCode] || { voltage: "208/230", phases: "1" };
       
       // Determine efficiency tier and specifications
       const isHighEfficiency = efficiencyCode.toUpperCase() === "H";
@@ -1502,7 +1502,7 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
         confidence: 78,
         systemType: systemType as any,
         btuCapacity,
-        voltage: "208-230",
+        voltage: "208/230",
         phases: "1",
         specifications: [
           { label: "SEER2 Rating", value: "15.0" },
@@ -2033,7 +2033,7 @@ export class HVACModelParser {
           confidence: 60,
           systemType: "Straight A/C",
           btuCapacity,
-          voltage: "208-230",
+          voltage: "208/230",
           phases: "1",
           specifications: [
             { label: "Refrigerant", value: "R-410A" },
