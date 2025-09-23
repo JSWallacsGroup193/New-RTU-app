@@ -118,6 +118,11 @@ const MANUFACTURER_VOLTAGE_MAPS = {
   york: {
     "S41": "208/230", "S43": "460", "S45": "575",
     "41": "208/230", "43": "460", "45": "575"
+  },
+  goodman: {
+    // Common Goodman voltage codes
+    "A1": "208/230", "A3": "460", "A5": "575",
+    "1": "208/230", "3": "460", "5": "575"
   }
 };
 
@@ -125,7 +130,15 @@ const MANUFACTURER_VOLTAGE_MAPS = {
 function detectVoltageFromCode(code: string, manufacturer?: string, fallbackMaps?: Record<string, any>): { voltage: string; phases: string; code?: string } {
   if (!code) return { voltage: "208/230", phases: "1" };
   
-  const upperCode = code.toUpperCase();
+  let upperCode = code.toUpperCase();
+  
+  // Special handling for Trane voltage tokens (strip leading letters like A1000 → 1000)
+  if (manufacturer === "trane" && /^[A-Z]+\d+$/.test(upperCode)) {
+    const numericPart = upperCode.replace(/^[A-Z]+/, "");
+    if (numericPart) {
+      upperCode = numericPart;
+    }
+  }
   
   // Primary: Universal voltage mapping
   const mapping = UNIVERSAL_VOLTAGE_MAPPINGS[upperCode];
@@ -528,8 +541,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       // Enhanced system type detection using smart inference
       const systemType = inferUnitCategory(modelNumber, family);
 
-      // Use universal voltage detection
-      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+      // Use enhanced voltage detection with manufacturer-specific maps
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken, "carrier") : { voltage: "208/230", phases: "1" };
 
       // Calculate confidence using multi-criteria scoring
       const confidence = calculateConfidence({
@@ -691,8 +704,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       // Enhanced system type detection using smart inference
       const systemType = inferUnitCategory(modelNumber, family);
 
-      // Use universal voltage detection
-      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+      // Use enhanced voltage detection with manufacturer-specific maps
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken, "york") : { voltage: "208/230", phases: "1" };
 
       // Calculate confidence using multi-criteria scoring
       const confidence = calculateConfidence({
@@ -757,8 +770,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       // Enhanced system type detection using smart inference
       const systemType = inferUnitCategory(modelNumber, family);
 
-      // Use universal voltage detection
-      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken) : { voltage: "208/230", phases: "1" };
+      // Use enhanced voltage detection with manufacturer-specific maps
+      const voltageInfo = voltageToken ? detectVoltageFromCode(voltageToken, "lennox") : { voltage: "208/230", phases: "1" };
 
       // Calculate confidence using multi-criteria scoring
       const confidence = calculateConfidence({
@@ -853,8 +866,8 @@ const MANUFACTURER_PATTERNS: ManufacturerPattern[] = [
       // Enhanced system type detection using smart inference
       const systemType = inferUnitCategory(modelNumber, familyCode);
 
-      // Use universal voltage detection
-      const voltageInfo = voltageCode ? detectVoltageFromCode(voltageCode) : { voltage: "208/230", phases: "1" };
+      // Use enhanced voltage detection with manufacturer-specific maps
+      const voltageInfo = voltageCode ? detectVoltageFromCode(voltageCode, "goodman") : { voltage: "208/230", phases: "1" };
 
       // Calculate confidence using multi-criteria scoring
       const confidence = calculateConfidence({
@@ -1674,10 +1687,31 @@ export class HVACModelParser {
       return null;
     }
     
-    // Sort by confidence score (highest first) - Python decoder approach
-    candidates.sort((a, b) => b.confidence - a.confidence);
+    // Sort by confidence score (highest first) with tie-breaker for equal scores
+    candidates.sort((a, b) => {
+      // Primary sort: confidence score (highest first)
+      if (b.confidence !== a.confidence) {
+        return b.confidence - a.confidence;
+      }
+      
+      // Tie-breaker 1: Prefer more specific patterns (more complex regex)
+      const aComplexity = a.result.specifications?.length || 0;
+      const bComplexity = b.result.specifications?.length || 0;
+      if (bComplexity !== aComplexity) {
+        return bComplexity - aComplexity;
+      }
+      
+      // Tie-breaker 2: Manufacturer priority (prefer major brands for ambiguous cases)
+      const brandPriority: Record<string, number> = {
+        "Trane": 10, "Carrier": 9, "York": 8, "Lennox": 7, "Goodman": 6,
+        "Rheem": 5, "Daikin": 4, "LG": 3, "Samsung": 2, "Mitsubishi": 1
+      };
+      const aPriority = brandPriority[a.manufacturer] || 0;
+      const bPriority = brandPriority[b.manufacturer] || 0;
+      return bPriority - aPriority;
+    });
     
-    // Return the highest confidence result
+    // Return the highest confidence result (with deterministic tie-breaking)
     return candidates[0].result;
   }
 
