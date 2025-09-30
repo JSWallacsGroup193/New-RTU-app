@@ -3,7 +3,7 @@ import { pgTable, text, varchar, integer, real, boolean, timestamp, json } from 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// =========lololol `oooooooooo===================================================================
+// ============================================================================
 // ENHANCED ENUMS
 // ============================================================================
 
